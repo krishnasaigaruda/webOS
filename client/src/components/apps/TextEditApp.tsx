@@ -11,6 +11,7 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [recentFiles, setRecentFiles] = useState<any[]>([]);
   const [showOpenPicker, setShowOpenPicker] = useState(false);
   const [showSavePicker, setShowSavePicker] = useState(false);
+  const [loadingFile, setLoadingFile] = useState(false);
   const { updateWindow, addNotification } = useStore();
 
   useEffect(() => {
@@ -23,16 +24,19 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   }, []); // eslint-disable-line
 
   const openFile = async (path: string) => {
+    setLoadingFile(true);
+    setIsOpen(true);
     try {
-      const data = await api.fs.read(path);
+      const res = await fetch(`http://localhost:3001/api/fs/read?path=${encodeURIComponent(path)}&text=true`);
+      const data = await res.json();
       setContent(data.content || '');
       setFilePath(path);
-      setIsOpen(true);
       setModified(false);
       updateWindow(win.id, { title: path.split('/').pop() || 'TextEdit', filePath: path });
     } catch {
       addNotification({ title: 'TextEdit', message: 'Could not open file', icon: 'textedit' });
     }
+    setLoadingFile(false);
   };
 
   const handleSave = async () => {
@@ -104,9 +108,17 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           {[12, 14, 16, 18, 20, 24].map(sz => <option key={sz} value={sz}>{sz}px</option>)}
         </select>
       </div>
-      <textarea id="textedit-area" style={st.editor} value={content}
-        onChange={e => { setContent(e.target.value); setModified(true); }}
-        placeholder="Start typing..." spellCheck />
+      {loadingFile ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', color: '#94a3b8', flexDirection: 'column', gap: 12 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid #334155', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ fontSize: 13 }}>Loading file...</span>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : (
+        <textarea id="textedit-area" style={st.editor} value={content}
+          onChange={e => { setContent(e.target.value); setModified(true); }}
+          placeholder="Start typing..." spellCheck />
+      )}
       <div style={st.statusBar}>
         <span>{content.length} chars | {content.split(/\n/).length} lines | {content.split(/\s+/).filter(Boolean).length} words</span>
         <span>{filePath ? filePath.split('/').pop() : 'Untitled'}{modified ? ' (modified)' : ''}</span>

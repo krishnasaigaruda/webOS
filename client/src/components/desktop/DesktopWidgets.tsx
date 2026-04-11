@@ -18,12 +18,29 @@ const DesktopWidgets: React.FC = () => {
     return () => clearInterval(t);
   }, []);
 
+  const [location, setLocation] = useState('');
+
   useEffect(() => {
-    api.weather().then(setWeather).catch(() => {});
+    // Get location-based weather
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          api.weather(pos.coords.latitude, pos.coords.longitude).then(setWeather).catch(() => {});
+          // Reverse geocode for city name
+          fetch(`https://geocode.maps.co/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`)
+            .then(r => r.json())
+            .then(data => setLocation(data.address?.city || data.address?.town || data.address?.county || ''))
+            .catch(() => {});
+        },
+        () => { api.weather().then(setWeather).catch(() => {}); }
+      );
+    } else {
+      api.weather().then(setWeather).catch(() => {});
+    }
   }, []);
 
   const weatherCode = weather?.current?.weather_code ?? 0;
-  const weatherIcon = WEATHER_ICONS[weatherCode] || '🌤';
+  const weatherIcon = WEATHER_ICONS[weatherCode] || WEATHER_ICONS[1];
   const temp = weather?.current?.temperature_2m;
 
   return (
@@ -47,8 +64,8 @@ const DesktopWidgets: React.FC = () => {
         <div style={styles.weatherWidget} onClick={() => openWindow('weather', 'Weather', 'weather')}>
           <span style={{ fontSize: 32 }}>{weatherIcon}</span>
           <div>
-            <div style={styles.temp}>{temp ? `${Math.round(temp)}°` : '--°'}</div>
-            <div style={styles.location}>San Francisco</div>
+            <div style={styles.temp}>{temp ? `${Math.round(temp * 9 / 5 + 32)}°F` : '--°'}</div>
+            <div style={styles.location}>{location || 'Loading...'}</div>
           </div>
         </div>
       )}

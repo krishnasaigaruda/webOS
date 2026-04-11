@@ -71,16 +71,25 @@ const Desktop: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSpotlight]);
 
-  // Welcome notification
+  // Welcome notification (only once per session)
   useEffect(() => {
-    setTimeout(() => {
-      addNotification({
-        title: 'Welcome to webOS',
-        message: 'Your desktop is ready. Try opening apps from the Dock or press ⌘+Space for Spotlight.',
-        icon: 'system',
-        app: 'system'
-      });
-    }, 1000);
+    if (!(window as any).__webos_welcomed) {
+      (window as any).__webos_welcomed = true;
+      setTimeout(() => {
+        addNotification({
+          title: 'Welcome to webOS',
+          message: 'Your desktop is ready. Open apps from the Dock or press Cmd+Space for Spotlight.',
+          app: 'system'
+        });
+      }, 1000);
+      setTimeout(() => {
+        addNotification({
+          title: 'webOS v2.0 Available',
+          message: 'A new version of webOS is available with improved AI, new apps, and bug fixes.',
+          app: 'system'
+        });
+      }, 5000);
+    }
   }, []); // eslint-disable-line
 
   const bg = WALLPAPERS[wallpaper] || WALLPAPERS.default;

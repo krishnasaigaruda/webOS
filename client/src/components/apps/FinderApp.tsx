@@ -49,6 +49,8 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [showNewDialog, setShowNewDialog] = useState<'file' | 'folder' | null>(null);
@@ -184,9 +186,28 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     { name: 'Home', path: HOME, icon: 'home' },
   ];
 
-  const filteredFiles = searchQuery
-    ? files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : files;
+  // Recursive search via server when query is entered
+  useEffect(() => {
+    setSelectedFile(null); // Clear selection when search changes
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await api.fs.search(searchQuery, currentPath);
+        setSearchResults(results.map((r: any) => ({
+          name: r.name, path: r.path, isDirectory: r.isDirectory,
+          size: 0, modified: '', mimeType: r.isDirectory ? 'directory' : 'file',
+        })));
+      } catch { setSearchResults([]); }
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, currentPath]); // eslint-disable-line
+
+  const filteredFiles = searchResults !== null ? searchResults : files;
 
   const webosApps = getAllApps();
 
@@ -259,15 +280,21 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
             </button>
           </div>
           <div style={styles.pathBar}>
-            {currentPath.split('/').filter(Boolean).map((part, i, arr) => (
-              <React.Fragment key={i}>
-                {i > 0 && <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.2" style={{flexShrink:0}}><path d="M1 1l4 4-4 4"/></svg>}
-                <span style={{ cursor: 'pointer', fontSize: 13, fontWeight: i === arr.length - 1 ? 600 : 400 }}
-                  onClick={() => navigate('/' + arr.slice(0, i + 1).join('/'))}>
-                  {part}
-                </span>
-              </React.Fragment>
-            ))}
+            {(() => {
+              // Only show selected file's parent path when a file is actually selected during search
+              const displayPath = (searchResults !== null && selectedFile)
+                ? selectedFile.substring(0, selectedFile.lastIndexOf('/'))
+                : currentPath;
+              return displayPath.split('/').filter(Boolean).map((part, i, arr) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.2" style={{flexShrink:0}}><path d="M1 1l4 4-4 4"/></svg>}
+                  <span style={{ cursor: 'pointer', fontSize: 13, fontWeight: i === arr.length - 1 ? 600 : 400 }}
+                    onClick={() => { setSearchQuery(''); navigate('/' + arr.slice(0, i + 1).join('/')); }}>
+                    {part}
+                  </span>
+                </React.Fragment>
+              ));
+            })()}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input style={styles.searchInput} placeholder="Search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
@@ -290,8 +317,8 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
 
         {/* File list */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)' }}>Loading...</div>
+          {(loading || searching) ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)' }}>{searching ? 'Searching...' : 'Loading...'}</div>
           ) : filteredFiles.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)', gap: 8 }}>
               <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3"><rect x="4" y="8" width="32" height="24" rx="3"/><path d="M4 12h32"/></svg>
@@ -352,7 +379,9 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
 
         <div style={styles.statusBar}>
           <span>{filteredFiles.length} items</span>
-          <span style={{ color: 'var(--text-tertiary)' }}>{currentPath}</span>
+          <span style={{ color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%', direction: 'rtl', textAlign: 'right' }}>
+            {selectedFile || currentPath}
+          </span>
         </div>
 
         {/* New file/folder dialog */}

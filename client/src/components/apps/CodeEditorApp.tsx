@@ -25,16 +25,23 @@ const MonacoEditor: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [content, setContent] = useState('');
   const [language, setLanguage] = useState('plaintext');
   const [modified, setModified] = useState(false);
+  const [loadingFile, setLoadingFile] = useState(true);
   const { theme, updateWindow, addNotification } = useStore();
 
   useEffect(() => {
     if (win.filePath) {
-      api.fs.read(win.filePath).then(data => {
-        setContent(data.content || '');
-        const ext = win.filePath!.split('.').pop()?.toLowerCase() || '';
-        setLanguage(LANG[ext] || 'plaintext');
-        updateWindow(win.id, { title: win.filePath!.split('/').pop() || 'Code Editor' });
-      }).catch(() => setContent('// Error loading file'));
+      setLoadingFile(true);
+      fetch(`http://localhost:3001/api/fs/read?path=${encodeURIComponent(win.filePath)}&text=true`)
+        .then(r => r.json())
+        .then(data => {
+          setContent(data.content || '');
+          const ext = win.filePath!.split('.').pop()?.toLowerCase() || '';
+          setLanguage(LANG[ext] || 'plaintext');
+          updateWindow(win.id, { title: win.filePath!.split('/').pop() || 'Code Editor' });
+        }).catch(() => setContent('// Error loading file'))
+        .finally(() => setLoadingFile(false));
+    } else {
+      setLoadingFile(false);
     }
   }, [win.filePath]); // eslint-disable-line
 
@@ -55,6 +62,13 @@ const MonacoEditor: React.FC<{ window: WindowState }> = ({ window: win }) => {
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{language}</span>
       </div>
       <div style={{ flex: 1 }}>
+        {loadingFile ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)', flexDirection: 'column', gap: 12 }}>
+            <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <span style={{ fontSize: 13 }}>Loading file...</span>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : (
         <Editor
           height="100%"
           language={language}
@@ -71,6 +85,7 @@ const MonacoEditor: React.FC<{ window: WindowState }> = ({ window: win }) => {
             scrollBeyondLastLine: false, tabSize: 2,
           }}
         />
+        )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, padding: '2px 12px', fontSize: 11, background: 'var(--accent)', color: '#fff' }}>
         <span>{language}</span>

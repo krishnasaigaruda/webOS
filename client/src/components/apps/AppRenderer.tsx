@@ -27,6 +27,7 @@ import AppStoreApp from './AppStoreApp';
 import UniversalPreviewApp from './UniversalPreviewApp';
 import ToolsHubApp from './ToolsHubApp';
 import DataAnalyzerApp from './DataAnalyzerApp';
+import HelpApp from './HelpApp';
 import { AppIcon } from '../../utils/icons';
 
 const APP_COMPONENTS: Record<string, React.FC<{ window: WindowState }>> = {
@@ -54,6 +55,7 @@ const APP_COMPONENTS: Record<string, React.FC<{ window: WindowState }>> = {
   'maps': MapsApp,
   'activity-monitor': ActivityMonitorApp,
   'app-store': AppStoreApp,
+  'help': HelpApp,
   'universal-preview': UniversalPreviewApp,
   'tools-hub': ToolsHubApp,
   'data-analyzer': DataAnalyzerApp,

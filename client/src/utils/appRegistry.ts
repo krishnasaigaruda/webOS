@@ -37,6 +37,7 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   'music': { id: 'music', name: 'Music', icon: 'music', category: 'media', defaultWidth: 600, defaultHeight: 500, description: 'Play and manage music' },
   'maps': { id: 'maps', name: 'Maps', icon: 'maps', category: 'utilities', defaultWidth: 900, defaultHeight: 650, description: 'Explore maps' },
   'activity-monitor': { id: 'activity-monitor', name: 'Activity Monitor', icon: 'activity-monitor', category: 'system', defaultWidth: 700, defaultHeight: 450, description: 'Monitor system resources' },
+  'help': { id: 'help', name: 'Help', icon: 'help', category: 'system', defaultWidth: 800, defaultHeight: 600, description: 'webOS help and documentation' },
   'app-store': { id: 'app-store', name: 'App Store', icon: 'app-store', category: 'system', defaultWidth: 900, defaultHeight: 650, description: 'Discover and install apps' },
 };
 

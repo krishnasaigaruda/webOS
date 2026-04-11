@@ -115,7 +115,7 @@ const MenuBar: React.FC = () => {
   const handleHelpMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     showContextMenu(e.currentTarget.getBoundingClientRect().left, 28, [
-      { label: 'webOS Help', action: () => openWindow('settings', 'Help', 'settings', { filePath: 'about' }) },
+      { label: 'webOS Help', action: () => openWindow('help', 'Help', 'help') },
       { separator: true, label: '' },
       { label: 'About webOS', action: () => openWindow('settings', 'About webOS', 'settings', { filePath: 'about' }) },
     ]);

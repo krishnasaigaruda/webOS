@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store/useStore';
 import { APP_REGISTRY, getAllApps } from '../../utils/appRegistry';
 import { api } from '../../utils/api';
+import { AppIcon } from '../../utils/icons';
 
 const SpotlightSearch: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -119,7 +120,10 @@ const SpotlightSearch: React.FC = () => {
                 onClick={() => handleSelect(result)}
                 onMouseEnter={() => setSelectedIndex(i)}
               >
-                <span style={{ fontSize: 24 }}>{result.icon}</span>
+                <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {result.type === 'app' ? <AppIcon appId={result.appId} size={36} /> :
+                    <svg width="32" height="32" viewBox="0 0 16 16"><path d={result.isDirectory ? "M1.5 4A1.5 1.5 0 013 2.5h3.5L8.5 5H13A1.5 1.5 0 0114.5 6.5v6A1.5 1.5 0 0113 14H3A1.5 1.5 0 011.5 12.5V4z" : "M4 1h5l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z"} fill={result.isDirectory ? "#64B5F6" : "#9CA3AF"}/></svg>}
+                </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {result.name}

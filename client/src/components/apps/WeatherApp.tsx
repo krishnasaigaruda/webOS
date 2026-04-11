@@ -21,9 +21,22 @@ const WEATHER_CODES: Record<number, { desc: string; icon: string }> = {
 const WeatherApp: React.FC<{ window: WindowState }> = () => {
   const [weather, setWeather] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cityName, setCityName] = useState('');
+  const [unit, setUnit] = useState<'C' | 'F'>('F');
 
   useEffect(() => {
-    api.weather().then(data => { setWeather(data); setLoading(false); }).catch(() => setLoading(false));
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          api.weather(pos.coords.latitude, pos.coords.longitude).then(data => { setWeather(data); setLoading(false); }).catch(() => setLoading(false));
+          fetch(`https://geocode.maps.co/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`)
+            .then(r => r.json()).then(data => setCityName(data.address?.city || data.address?.town || '')).catch(() => {});
+        },
+        () => { api.weather().then(data => { setWeather(data); setLoading(false); }).catch(() => setLoading(false)); }
+      );
+    } else {
+      api.weather().then(data => { setWeather(data); setLoading(false); }).catch(() => setLoading(false));
+    }
   }, []);
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#0f172a', color: '#94a3b8' }}>Loading weather...</div>;
@@ -31,17 +44,23 @@ const WeatherApp: React.FC<{ window: WindowState }> = () => {
 
   const code = weather.current.weather_code;
   const info = WEATHER_CODES[code] || WEATHER_CODES[0];
-  const temp = Math.round(weather.current.temperature_2m);
+  const tempC = Math.round(weather.current.temperature_2m);
+  const temp = unit === 'F' ? Math.round(tempC * 9 / 5 + 32) : tempC;
   const isNight = new Date().getHours() > 18 || new Date().getHours() < 6;
+  const toUnit = (c: number) => unit === 'F' ? Math.round(c * 9 / 5 + 32) : Math.round(c);
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: isNight ? 'linear-gradient(180deg, #0f172a, #1e1b4b)' : 'linear-gradient(180deg, #3b82f6, #1e40af)', color: '#fff' }}>
       {/* Current */}
       <div style={{ textAlign: 'center', padding: '40px 20px 30px' }}>
         <div style={{ fontSize: 72 }}>{info.icon}</div>
-        <div style={{ fontSize: 80, fontWeight: 200, lineHeight: 1 }}>{temp}°</div>
+        <div style={{ fontSize: 80, fontWeight: 200, lineHeight: 1 }}>{temp}°{unit}</div>
         <div style={{ fontSize: 18, opacity: 0.8, marginTop: 8 }}>{info.desc}</div>
-        <div style={{ fontSize: 14, opacity: 0.5, marginTop: 4 }}>San Francisco</div>
+        <div style={{ fontSize: 14, opacity: 0.5, marginTop: 4 }}>{cityName || 'Your Location'}</div>
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 12 }}>
+          <button onClick={() => setUnit('F')} style={{ padding: '4px 14px', borderRadius: 14, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', background: unit === 'F' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)', color: '#fff' }}>°F</button>
+          <button onClick={() => setUnit('C')} style={{ padding: '4px 14px', borderRadius: 14, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', background: unit === 'C' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)', color: '#fff' }}>°C</button>
+        </div>
       </div>
 
       {/* Details */}
@@ -73,7 +92,7 @@ const WeatherApp: React.FC<{ window: WindowState }> = () => {
                   {i === 0 ? 'Today' : date.toLocaleDateString('en-US', { weekday: 'short' })}
                 </span>
                 <span style={{ fontSize: 24, width: 36, textAlign: 'center' }}>{dayInfo.icon}</span>
-                <span style={{ width: 32, textAlign: 'right', opacity: 0.5, fontSize: 14 }}>{Math.round(min)}°</span>
+                <span style={{ width: 32, textAlign: 'right', opacity: 0.5, fontSize: 14 }}>{toUnit(min)}°</span>
                 <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.15)', position: 'relative', overflow: 'hidden' }}>
                   <div style={{
                     position: 'absolute', height: '100%', borderRadius: 3,
@@ -82,7 +101,7 @@ const WeatherApp: React.FC<{ window: WindowState }> = () => {
                     right: `${Math.max(0, 100 - (Math.round(max) + 10) / 50 * 100)}%`,
                   }} />
                 </div>
-                <span style={{ width: 32, fontSize: 14 }}>{Math.round(max)}°</span>
+                <span style={{ width: 32, fontSize: 14 }}>{toUnit(max)}°</span>
               </div>
             );
           })}

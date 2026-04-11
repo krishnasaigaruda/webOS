@@ -342,6 +342,18 @@ export const TrashIcon: React.FC<IconProps> = ({ size = 48 }) => (
   </svg>
 );
 
+const HelpIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#helpGr)" />
+    <defs><linearGradient id="helpGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#5B86E5" /><stop offset="1" stopColor="#36D1DC" /></linearGradient></defs>
+    <circle cx="32" cy="28" r="12" fill="none" stroke="white" strokeWidth="2.5"/>
+    <path d="M28 24c0-3 2-5 4-5s4 2 4 4c0 2-2 3-4 4v2" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/>
+    <circle cx="32" cy="37" r="1.5" fill="white"/>
+    <rect x="18" y="46" width="28" height="3" rx="1.5" fill="white" opacity="0.5"/>
+    <rect x="24" y="52" width="16" height="2" rx="1" fill="white" opacity="0.3"/>
+  </svg>
+);
+
 const TodoIconComp: React.FC<IconProps> = ({ size = 48 }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
     <rect width="64" height="64" rx="14" fill="url(#todoGr)" />
@@ -396,6 +408,7 @@ export const APP_ICONS: Record<string, React.FC<IconProps>> = {
   'tools-hub': ToolsHubIcon,
   'app-store': AppStoreIconComponent,
   'todo': TodoIconComp,
+  'help': HelpIconComp,
 };
 
 export const AppIcon: React.FC<{ appId: string; size?: number }> = ({ appId, size = 48 }) => {

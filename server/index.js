@@ -69,11 +69,36 @@ app.get('/api/fs/read', (req, res) => {
   if (!filePath) return res.status(400).json({ error: 'Path required' });
   try {
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';
-    if (mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/javascript') {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      res.json({ content, mimeType });
-    } else {
-      res.sendFile(filePath);
+    const forceText = req.query.text === 'true';
+    const isTextLike = mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/javascript' || mimeType === 'application/xml' || mimeType === 'application/x-yaml';
+
+    // Always try to read as text first
+    if (isTextLike || forceText) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        return res.json({ content, mimeType });
+      } catch {
+        // If utf-8 fails, try latin1 (reads any byte)
+        try {
+          const content = fs.readFileSync(filePath, 'latin1');
+          return res.json({ content, mimeType });
+        } catch {
+          return res.json({ content: '[Binary file - cannot display as text]', mimeType });
+        }
+      }
+    }
+
+    // For non-text types without forceText, try text first then fall back to sendFile
+    try {
+      const buf = fs.readFileSync(filePath);
+      // Check if first 1000 bytes have null bytes (binary indicator)
+      const hasNull = buf.slice(0, 1000).includes(0);
+      if (!hasNull) {
+        return res.json({ content: buf.toString('utf-8'), mimeType });
+      }
+      return res.sendFile(filePath);
+    } catch {
+      return res.sendFile(filePath);
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -184,7 +209,7 @@ app.get('/api/fs/search', (req, res) => {
   const results = [];
 
   function searchDir(dirPath, depth = 0) {
-    if (depth > 5 || results.length > 50) return;
+    if (depth > 10 || results.length > 200) return;
     try {
       const items = fs.readdirSync(dirPath, { withFileTypes: true });
       for (const item of items) {
@@ -290,67 +315,70 @@ app.post('/api/system/dnd', (req, res) => {
   });
 });
 
-// ============= AI API =============
+// ============= AI API (Pollinations.ai proxy, same as Orbix AI) =============
 
+function cleanAIResponse(text) {
+  text = text.trim();
+  text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  text = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '').trim();
+  // Strip pollinations ads
+  const lines = text.split('\n');
+  const cleaned = lines.filter(l =>
+    !(l.toLowerCase().includes('pollinations.ai') && l.trim().length < 200) &&
+    !['---', '***', '___'].includes(l.trim())
+  );
+  while (cleaned.length && !cleaned[cleaned.length - 1].trim()) cleaned.pop();
+  return cleaned.join('\n').trim();
+}
+
+// This endpoint is used by both the AI chat app AND the Orbix iframe
+app.post('/api/chat', async (req, res) => {
+  const { messages } = req.body;
+  try {
+    const payload = JSON.stringify({
+      messages,
+      model: 'openai',
+      seed: Math.floor(Math.random() * 999999),
+    });
+    const response = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    let text = await response.text();
+    text = cleanAIResponse(text);
+    if (text) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.send(text);
+    } else {
+      res.status(502).send('AI service returned empty response. Try again.');
+    }
+  } catch (err) {
+    console.error('AI error:', err.message);
+    res.status(502).send('AI service unavailable. Try again.');
+  }
+});
+
+// Also keep /api/ai/chat for backward compat
 app.post('/api/ai/chat', async (req, res) => {
   const { messages } = req.body;
-  const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-  const lastMessage = messages[messages.length - 1]?.content || '';
-
-  // Try OpenAI if key exists
-  if (apiKey && process.env.OPENAI_API_KEY) {
-    try {
-      const { default: OpenAI } = await import('openai');
-      const openai = new OpenAI({ apiKey });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages
-      });
-      return res.json({ response: completion.choices[0].message.content, model: 'gpt-4o-mini' });
-    } catch (err) {
-      console.error('OpenAI error:', err.message);
-    }
+  try {
+    const payload = JSON.stringify({
+      messages,
+      model: 'openai',
+      seed: Math.floor(Math.random() * 999999),
+    });
+    const response = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    let text = await response.text();
+    text = cleanAIResponse(text);
+    res.json({ response: text || 'No response from AI.', model: 'pollinations' });
+  } catch (err) {
+    res.json({ response: 'AI service unavailable. Check your internet connection.', model: 'error' });
   }
-
-  // Smart local fallback - actually useful responses
-  const lower = lastMessage.toLowerCase();
-  let response = '';
-
-  if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
-    response = "Hello! I'm the webOS AI Assistant. I can help you with:\n\n• **Open apps** — say \"open calculator\" or \"open code editor\"\n• **File operations** — \"create a file\", \"list documents\"\n• **Math** — \"what is 25 * 47?\"\n• **System info** — \"system info\", \"battery\", \"disk space\"\n• **Writing** — \"write a poem\", \"draft an email\"\n\nFor full AI capabilities, set your `OPENAI_API_KEY` environment variable.";
-  } else if (lower.includes('what is') && lower.match(/[\d+\-*/()]/)) {
-    try {
-      const expr = lower.replace(/what is/i, '').replace(/[^0-9+\-*/().%\s]/g, '').trim();
-      const result = Function('"use strict"; return (' + expr + ')')();
-      response = `The answer is **${result}**`;
-    } catch { response = "I couldn't calculate that. Please check the expression."; }
-  } else if (lower.includes('time') || lower.includes('date')) {
-    response = `The current date and time is **${new Date().toLocaleString()}**`;
-  } else if (lower.includes('system info') || lower.includes('about this')) {
-    const os = require('os');
-    response = `**System Info:**\n• Hostname: ${os.hostname()}\n• Platform: ${os.platform()} ${os.arch()}\n• CPUs: ${os.cpus().length} cores\n• Memory: ${(os.totalmem()/1e9).toFixed(1)} GB total, ${(os.freemem()/1e9).toFixed(1)} GB free\n• Uptime: ${Math.floor(os.uptime()/3600)}h ${Math.floor((os.uptime()%3600)/60)}m`;
-  } else if (lower.includes('list') && (lower.includes('file') || lower.includes('document'))) {
-    try {
-      const files = fs.readdirSync(path.join(HOME, 'Documents')).filter(f => !f.startsWith('.')).slice(0, 15);
-      response = `**Files in Documents:**\n${files.map(f => '• ' + f).join('\n')}`;
-    } catch { response = "I couldn't access the Documents folder."; }
-  } else if (lower.includes('create') && lower.includes('file')) {
-    response = "To create a file, I'd need to execute a command. You can:\n1. Open **Finder** and use the New File button\n2. Open **Code Editor** and save a new file\n3. Open **TextEdit** to write and save text";
-  } else if (lower.includes('joke')) {
-    const jokes = [
-      "Why do programmers prefer dark mode? Because light attracts bugs! 🪲",
-      "There are only 10 types of people: those who understand binary and those who don't.",
-      "A SQL query walks into a bar, sees two tables, and asks: 'Can I JOIN you?'",
-      "Why was the JavaScript developer sad? Because he didn't Node how to Express himself.",
-    ];
-    response = jokes[Math.floor(Math.random() * jokes.length)];
-  } else if (lower.includes('weather')) {
-    response = "Open the **Weather** app from the dock to see current conditions and forecasts! You can also check the widget panel.";
-  } else {
-    response = `I understand you're asking about: "${lastMessage}"\n\nI'm running in **offline mode** with basic capabilities. For full AI conversations, code help, and analysis:\n\n1. Set \`OPENAI_API_KEY=your-key\` in your environment\n2. Restart the webOS server\n\nMeanwhile, try asking me to:\n• Open an app\n• Do math calculations\n• Get system info\n• Tell a joke`;
-  }
-
-  res.json({ response, model: 'local' });
 });
 
 // Dictionary API

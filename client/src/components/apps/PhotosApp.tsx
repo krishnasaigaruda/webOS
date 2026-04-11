@@ -7,7 +7,7 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(win.filePath || null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'library' | 'recents'>('library');
-  const { openWindow } = useStore();
+  useStore();
 
   useEffect(() => { loadPhotos(); }, []); // eslint-disable-line
 
@@ -37,9 +37,9 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
             Library
           </button>
           <span style={{ flex: 1, textAlign: 'center', fontSize: 13, opacity: 0.7 }}>{selectedPhoto.split('/').pop()}</span>
-          <button style={s.backBtn} onClick={() => openWindow('textedit', selectedPhoto.split('/').pop() || '', 'textedit', { filePath: selectedPhoto })}>
-            Edit
-          </button>
+          <a href={imgUrl(selectedPhoto)} download={selectedPhoto.split('/').pop()} style={{ ...s.backBtn, textDecoration: 'none' }}>
+            Download
+          </a>
         </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <img src={imgUrl(selectedPhoto)} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4 }} />
@@ -90,8 +90,8 @@ const s: Record<string, React.CSSProperties> = {
   toolbar: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #1e293b', background: '#0f172a' },
   tabBtn: { padding: '5px 14px', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#e2e8f0', border: 'none' },
   refreshBtn: { padding: '4px 10px', borderRadius: 6, fontSize: 14, cursor: 'pointer', color: '#94a3b8', border: '1px solid #334155', background: 'none' },
-  grid: { flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 2, overflowY: 'auto', padding: 2 },
-  photoCard: { aspectRatio: '1', cursor: 'pointer', overflow: 'hidden', background: '#1e293b' },
+  grid: { flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 3, overflowY: 'auto', padding: 3 },
+  photoCard: { aspectRatio: '4/3', cursor: 'pointer', overflow: 'hidden', background: '#1e293b', borderRadius: 4 },
   viewerToolbar: { display: 'flex', alignItems: 'center', padding: '8px 12px', background: 'rgba(0,0,0,0.8)', color: '#fff' },
   backBtn: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 6, fontSize: 13, color: '#fff', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none' },
 };
