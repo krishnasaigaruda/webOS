@@ -34,24 +34,10 @@ const Desktop: React.FC = () => {
   const handleDesktopContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     showContextMenu(e.clientX, e.clientY, [
-      { label: 'New Folder', action: () => openWindow('finder', 'Finder', 'finder'), shortcut: '⇧⌘N' },
+      { label: 'Change Wallpaper...', action: () => openWindow('settings', 'Wallpaper', 'settings', { filePath: 'wallpaper' }) },
       { separator: true, label: '' },
-      { label: 'Get Info', action: () => {} },
-      { label: 'Change Wallpaper...', action: () => openWindow('settings', 'Settings', 'settings'), shortcut: '' },
-      { separator: true, label: '' },
-      { label: 'Use Stacks', action: () => {} },
-      { label: 'Sort By', submenu: [
-        { label: 'Name', action: () => {} },
-        { label: 'Date Modified', action: () => {} },
-        { label: 'Date Created', action: () => {} },
-        { label: 'Size', action: () => {} },
-        { label: 'Kind', action: () => {} },
-      ]},
-      { separator: true, label: '' },
-      { label: 'Show View Options', action: () => {} },
-      { separator: true, label: '' },
-      { label: 'Open TextEdit', action: () => openWindow('textedit', 'TextEdit', 'textedit') },
-      { label: 'Open with Universal Preview', action: () => openWindow('universal-preview', 'Universal Preview', 'universal-preview') },
+      { label: 'System Settings...', action: () => openWindow('settings', 'Settings', 'settings') },
+      { label: 'Open Finder', action: () => openWindow('finder', 'Finder', 'finder') },
     ]);
   }, [showContextMenu, openWindow]);
 
@@ -82,13 +68,6 @@ const Desktop: React.FC = () => {
           app: 'system'
         });
       }, 1000);
-      setTimeout(() => {
-        addNotification({
-          title: 'webOS v2.0 Available',
-          message: 'A new version of webOS is available with improved AI, new apps, and bug fixes.',
-          app: 'system'
-        });
-      }, 5000);
     }
   }, []); // eslint-disable-line
 

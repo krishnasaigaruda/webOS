@@ -61,24 +61,41 @@ const MenuBar: React.FC = () => {
       { label: 'Redo', action: () => document.execCommand('redo'), shortcut: '\u21E7\u2318Z' },
       { separator: true, label: '' },
       { label: 'Cut', action: () => document.execCommand('cut'), shortcut: '\u2318X' },
-      { label: 'Copy', action: () => document.execCommand('copy'), shortcut: '\u2318C' },
-      { label: 'Paste', action: () => document.execCommand('paste'), shortcut: '\u2318V' },
-      { label: 'Select All', action: () => document.execCommand('selectAll'), shortcut: '\u2318A' },
-      { separator: true, label: '' },
-      { label: 'Find...', action: () => {}, shortcut: '\u2318F' },
+      { label: 'Copy', action: () => {
+        const sel = window.getSelection()?.toString();
+        if (sel) navigator.clipboard.writeText(sel);
+      }, shortcut: '\u2318C' },
+      { label: 'Paste', action: async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          document.execCommand('insertText', false, text);
+        } catch { document.execCommand('paste'); }
+      }, shortcut: '\u2318V' },
+      { label: 'Select All', action: () => {
+        const active = document.activeElement;
+        if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {
+          (active as HTMLInputElement).select();
+        } else {
+          document.execCommand('selectAll');
+        }
+      }, shortcut: '\u2318A' },
     ]);
   };
 
   const handleViewMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
+    const isFullscreen = !!document.fullscreenElement;
     showContextMenu(e.currentTarget.getBoundingClientRect().left, 28, [
-      { label: theme === 'dark' ? 'Light Mode' : 'Dark Mode', action: () => toggleTheme() },
+      { label: theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode', action: () => toggleTheme() },
       { separator: true, label: '' },
-      { label: 'Show Toolbar', action: () => {} },
-      { label: 'Show Sidebar', action: () => {} },
+      { label: isFullscreen ? 'Exit Full Screen' : 'Enter Full Screen', action: () => {
+        if (isFullscreen) document.exitFullscreen?.();
+        else document.documentElement.requestFullscreen?.();
+      }},
       { separator: true, label: '' },
-      { label: 'Enter Full Screen', action: () => { document.documentElement.requestFullscreen?.(); } },
-      { label: 'Exit Full Screen', action: () => { document.exitFullscreen?.(); } },
+      { label: 'Zoom In', action: () => { (document.body.style as any).zoom = String(parseFloat((document.body.style as any).zoom || '1') + 0.1); } },
+      { label: 'Zoom Out', action: () => { (document.body.style as any).zoom = String(Math.max(0.5, parseFloat((document.body.style as any).zoom || '1') - 0.1)); } },
+      { label: 'Actual Size', action: () => { (document.body.style as any).zoom = '1'; } },
     ]);
   };
 

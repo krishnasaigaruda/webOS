@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WindowState, useStore } from '../../store/useStore';
-import { APP_REGISTRY } from '../../utils/appRegistry';
+import { registerApp } from '../../utils/appRegistry';
 import { AppIcon } from '../../utils/icons';
 
 interface StoreApp {
@@ -23,16 +23,28 @@ const STORE_APPS: StoreApp[] = [
   { id: 'document', name: 'Document', developer: 'webOS', rating: 4.4, category: 'Productivity', description: 'Rich text document editor with formatting, styles, and export options.', installed: true, color: '#1565C0' },
   { id: 'data-analyzer', name: 'Data Analyzer', developer: 'webOS Labs', rating: 4.6, category: 'Developer Tools', description: 'Analyze CSV, JSON and other data formats with charts and statistics.', installed: true, featured: true, color: '#E65100' },
   { id: 'universal-preview', name: 'Universal Preview', developer: 'webOS Labs', rating: 4.7, category: 'Utilities', description: 'Preview any file type - images, documents, code, media, and more.', installed: true, color: '#283593' },
-  { id: 'tools-hub', name: 'Tools Hub', developer: 'webOS Labs', rating: 4.5, category: 'Utilities', description: '60+ tools: color picker, QR generator, JSON formatter, regex tester, and more.', installed: true, color: '#263238' },
+  { id: 'tools-hub', name: 'Tools Hub', developer: 'webOS Labs', rating: 4.5, category: 'Utilities', description: '60+ tools: color picker, QR generator, JSON formatter, regex tester, and more.', installed: false, color: '#263238' },
   { id: 'camera', name: 'Camera', developer: 'webOS', rating: 4.2, category: 'Photo & Video', description: 'Take photos and videos using your webcam.', installed: true, color: '#37474F' },
   { id: 'music', name: 'Music', developer: 'webOS', rating: 4.1, category: 'Entertainment', description: 'Play and organize your music library.', installed: true, color: '#AD1457' },
   { id: 'maps', name: 'Maps', developer: 'webOS', rating: 4.0, category: 'Navigation', description: 'Explore maps and get directions with OpenStreetMap.', installed: true, color: '#2E7D32' },
   { id: 'dictionary', name: 'Dictionary', developer: 'webOS', rating: 4.3, category: 'Reference', description: 'Look up word definitions, synonyms, and pronunciation.', installed: true, color: '#4E342E' },
-  { id: 'screen-recorder', name: 'Screen Recorder', developer: 'webOS', rating: 3.9, category: 'Utilities', description: 'Record your screen for tutorials and presentations.', installed: true, color: '#333' },
-  { id: 'screenshot', name: 'Screenshot', developer: 'webOS', rating: 4.1, category: 'Utilities', description: 'Capture your screen or specific areas.', installed: true, color: '#4527A0' },
+  { id: 'typing-test', name: 'Typing Test', developer: 'webOS Games', rating: 4.4, category: 'Games', description: 'Test your typing speed and accuracy with real-time WPM tracking.', installed: false, color: '#F59E0B' },
+  { id: 'drawing-pad', name: 'Drawing Pad', developer: 'webOS Creative', rating: 4.2, category: 'Creative', description: 'Digital drawing canvas with brushes, colors, and layers.', installed: false, color: '#EC4899' },
+  { id: 'whiteboard', name: 'Whiteboard', developer: 'webOS Creative', rating: 4.1, category: 'Creative', description: 'Collaborative whiteboard for brainstorming and sketching.', installed: false, color: '#F3F4F6' },
+  { id: 'quiz', name: 'Quiz Game', developer: 'webOS Games', rating: 4.0, category: 'Games', description: 'Test your knowledge with trivia questions across multiple categories.', installed: false, color: '#8B5CF6' },
+  { id: 'periodic-table', name: 'Periodic Table', developer: 'webOS Education', rating: 4.5, category: 'Education', description: 'Interactive periodic table with element details and properties.', installed: false, color: '#06B6D4' },
+  { id: 'metronome', name: 'Metronome', developer: 'webOS Music', rating: 3.9, category: 'Music', description: 'Precise digital metronome for musicians and practice sessions.', installed: false, color: '#EF4444' },
+  { id: 'password-gen', name: 'Password Generator', developer: 'webOS Security', rating: 4.6, category: 'Utilities', description: 'Generate strong, secure passwords with customizable options.', installed: false, color: '#10B981' },
+  { id: 'qr-generator', name: 'QR Generator', developer: 'webOS Tools', rating: 4.3, category: 'Utilities', description: 'Create QR codes for URLs, text, contacts, and more.', installed: false, color: '#1F2937' },
+  { id: 'translator', name: 'Translator', developer: 'webOS Tools', rating: 4.1, category: 'Utilities', description: 'Translate text between multiple languages instantly.', installed: false, color: '#3B82F6' },
+  { id: 'coin-flip', name: 'Coin Flip', developer: 'webOS Games', rating: 3.8, category: 'Games', description: 'Flip a virtual coin with realistic animation. Heads or tails?', installed: false, color: '#D97706' },
+  { id: 'dice-roller', name: 'Dice Roller', developer: 'webOS Games', rating: 3.7, category: 'Games', description: 'Roll virtual dice for board games and tabletop RPGs.', installed: false, color: '#DC2626' },
+  { id: 'graph-plotter', name: 'Graph Plotter', developer: 'webOS Math', rating: 4.4, category: 'Education', description: 'Plot mathematical functions and equations on interactive graphs.', installed: false, color: '#7C3AED' },
+  { id: 'voice-recorder', name: 'Voice Recorder', developer: 'webOS Media', rating: 4.0, category: 'Utilities', description: 'Record audio with your microphone. Save and playback recordings.', installed: false, color: '#EF4444' },
+  { id: 'tuner', name: 'Guitar Tuner', developer: 'webOS Music', rating: 4.2, category: 'Music', description: 'Tune your guitar and other instruments with a chromatic tuner.', installed: false, color: '#A855F7' },
 ];
 
-const CATEGORIES = ['All', 'Discover', 'Productivity', 'Developer Tools', 'Utilities', 'Photo & Video', 'Entertainment', 'Reference'];
+const CATEGORIES = ['All', 'Discover', 'Productivity', 'Developer Tools', 'Utilities', 'Games', 'Education', 'Creative', 'Music', 'Photo & Video', 'Entertainment', 'Reference'];
 
 const AppStoreApp: React.FC<{ window: WindowState }> = () => {
   const [activeCategory, setActiveCategory] = useState('Discover');
@@ -43,12 +55,21 @@ const AppStoreApp: React.FC<{ window: WindowState }> = () => {
 
   const handleInstall = (app: StoreApp) => {
     setInstalled(prev => { const s = new Set(Array.from(prev)); s.add(app.id); return s; });
-    addNotification({ title: 'App Store', message: `${app.name} installed successfully`, icon: 'settings' });
+    // Register in the global app registry so it shows in Spotlight and Finder
+    registerApp({
+      id: app.id,
+      name: app.name,
+      icon: app.id,
+      category: app.category.toLowerCase().replace(/ & /g, '-').replace(/ /g, '-') as any,
+      defaultWidth: 800,
+      defaultHeight: 600,
+      description: app.description,
+    });
+    addNotification({ title: 'App Store', message: `${app.name} installed successfully`, app: 'app-store' });
   };
 
   const handleOpen = (app: StoreApp) => {
-    const reg = APP_REGISTRY[app.id];
-    if (reg) openWindow(app.id, reg.name, app.id, { width: reg.defaultWidth, height: reg.defaultHeight });
+    openWindow(app.id, app.name, app.id, { width: 800, height: 600 });
   };
 
   const filteredApps = STORE_APPS.filter(app => {

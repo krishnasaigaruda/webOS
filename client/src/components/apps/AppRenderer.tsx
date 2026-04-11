@@ -28,6 +28,7 @@ import UniversalPreviewApp from './UniversalPreviewApp';
 import ToolsHubApp from './ToolsHubApp';
 import DataAnalyzerApp from './DataAnalyzerApp';
 import HelpApp from './HelpApp';
+import ToolsIframeApp from './ToolsIframeApp';
 import { AppIcon } from '../../utils/icons';
 
 const APP_COMPONENTS: Record<string, React.FC<{ window: WindowState }>> = {
@@ -61,22 +62,47 @@ const APP_COMPONENTS: Record<string, React.FC<{ window: WindowState }>> = {
   'data-analyzer': DataAnalyzerApp,
 };
 
+// Tools Hub apps that can be installed from the App Store
+const TOOLS_HUB_APPS: Record<string, string> = {
+  'typing-test': 'typing-test.html',
+  'drawing-pad': 'drawing-pad.html',
+  'whiteboard': 'whiteboard.html',
+  'quiz': 'quiz.html',
+  'periodic-table': 'periodic-table.html',
+  'metronome': 'metronome.html',
+  'password-gen': 'password-gen.html',
+  'qr-generator': 'qr-generator.html',
+  'translator': 'translator.html',
+  'coin-flip': 'coin-flip.html',
+  'dice-roller': 'dice-roller.html',
+  'graph-plotter': 'graph-plotter.html',
+  'voice-recorder': 'voice-recorder.html',
+  'tuner': 'tuner.html',
+};
+
+const ToolsHubWrapper: React.FC<{ window: WindowState; file: string }> = ({ window: win, file }) => (
+  <ToolsIframeApp window={win} src={`/repos/Tools-Hub/tools/${file}`} />
+);
+
 const AppRenderer: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const Component = APP_COMPONENTS[win.appId];
-  if (!Component) {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100%', color: 'var(--text-secondary)', flexDirection: 'column', gap: 12,
-        background: 'var(--window-content)',
-      }}>
-        <AppIcon appId={win.appId} size={64} />
-        <span style={{ fontSize: 14 }}>App "{win.appId}" is not installed</span>
-        <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Check the App Store for available apps</span>
-      </div>
-    );
-  }
-  return <Component window={win} />;
+  if (Component) return <Component window={win} />;
+
+  // Check if it's a Tools Hub app
+  const toolsFile = TOOLS_HUB_APPS[win.appId];
+  if (toolsFile) return <ToolsHubWrapper window={win} file={toolsFile} />;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: '100%', color: 'var(--text-secondary)', flexDirection: 'column', gap: 12,
+      background: 'var(--window-content)',
+    }}>
+      <AppIcon appId={win.appId} size={64} />
+      <span style={{ fontSize: 14 }}>App "{win.appId}" is not installed</span>
+      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Check the App Store for available apps</span>
+    </div>
+  );
 };
 
 export default AppRenderer;

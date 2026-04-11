@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { WindowState, useStore } from '../../store/useStore';
+import { WindowState } from '../../store/useStore';
 import { api } from '../../utils/api';
 
 const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [photos, setPhotos] = useState<any[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(win.filePath || null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'library' | 'recents'>('library');
-  useStore();
 
   useEffect(() => { loadPhotos(); }, []); // eslint-disable-line
 
@@ -18,7 +16,7 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
       try {
         const files = await api.fs.list(p);
         allFiles.push(...files.filter((f: any) =>
-          f.name.match(/\.(png|jpg|jpeg|gif|svg|webp|bmp|ico|heic)$/i)
+          f.name.match(/\.(png|jpg|jpeg|gif|svg|webp|bmp|ico|heic|tiff)$/i)
         ));
       } catch {}
     }
@@ -28,72 +26,60 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
 
   const imgUrl = (path: string) => `http://localhost:3001/api/fs/serve?path=${encodeURIComponent(path)}`;
 
+  // Full-size viewer
   if (selectedPhoto) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
-        <div style={s.viewerToolbar}>
-          <button style={s.backBtn} onClick={() => setSelectedPhoto(null)}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#000' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: 'rgba(0,0,0,0.9)', gap: 12 }}>
+          <button onClick={() => setSelectedPhoto(null)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 6, fontSize: 13, color: '#fff', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none' }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 1L3 6l5 5"/></svg>
             Library
           </button>
-          <span style={{ flex: 1, textAlign: 'center', fontSize: 13, opacity: 0.7 }}>{selectedPhoto.split('/').pop()}</span>
-          <a href={imgUrl(selectedPhoto)} download={selectedPhoto.split('/').pop()} style={{ ...s.backBtn, textDecoration: 'none' }}>
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{selectedPhoto.split('/').pop()}</span>
+          <a href={imgUrl(selectedPhoto)} download={selectedPhoto.split('/').pop()} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 13, color: '#fff', background: 'rgba(255,255,255,0.1)', textDecoration: 'none', border: 'none' }}>
             Download
           </a>
         </div>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <img src={imgUrl(selectedPhoto)} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4 }} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
+          <img src={imgUrl(selectedPhoto)} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
         </div>
       </div>
     );
   }
 
+  // Grid view
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a', color: '#e2e8f0' }}>
-      <div style={s.toolbar}>
-        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 2 }}>
-          {(['library', 'recents'] as const).map(t => (
-            <button key={t} style={{ ...s.tabBtn, background: tab === t ? 'rgba(255,255,255,0.15)' : 'transparent' }}
-              onClick={() => setTab(t)}>{t === 'library' ? 'Library' : 'Recents'}</button>
-          ))}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #1e293b' }}>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Library</span>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>{photos.length} photos</span>
-        <button style={s.refreshBtn} onClick={loadPhotos}>↻</button>
+        <span style={{ fontSize: 12, color: '#64748b' }}>{photos.length} photos</span>
+        <button onClick={loadPhotos} style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, color: '#94a3b8', border: '1px solid #334155', background: 'none', cursor: 'pointer' }}>Refresh</button>
       </div>
-      <div style={s.grid}>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
         {loading ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 60, color: '#94a3b8' }}>Scanning for photos...</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>Scanning for photos...</div>
         ) : photos.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 60, color: '#94a3b8' }}>
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity="0.3">
-              <rect x="6" y="12" width="36" height="28" rx="4" stroke="white" strokeWidth="2"/>
-              <circle cx="20" cy="24" r="5" stroke="white" strokeWidth="2"/>
-              <path d="M12 36l8-10 6 6 4-4 8 8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: '#64748b' }}>
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3"><rect x="6" y="10" width="36" height="28" rx="4"/><circle cx="18" cy="22" r="4"/><path d="M6 34l10-10 8 8 6-6 12 12"/></svg>
             <p>No photos found</p>
             <p style={{ fontSize: 12 }}>Add images to ~/Pictures, ~/Desktop, or ~/Downloads</p>
           </div>
         ) : (
-          photos.map((photo, i) => (
-            <div key={i} style={s.photoCard} onClick={() => setSelectedPhoto(photo.path)}>
-              <img src={imgUrl(photo.path)} alt={photo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-            </div>
-          ))
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 3 }}>
+            {photos.map((photo, i) => (
+              <div key={i} onClick={() => setSelectedPhoto(photo.path)}
+                style={{ position: 'relative', paddingBottom: '75%', background: '#1e293b', borderRadius: 4, overflow: 'hidden', cursor: 'pointer' }}>
+                <img src={imgUrl(photo.path)} alt={photo.name} loading="lazy"
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
   );
-};
-
-const s: Record<string, React.CSSProperties> = {
-  toolbar: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid #1e293b', background: '#0f172a' },
-  tabBtn: { padding: '5px 14px', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#e2e8f0', border: 'none' },
-  refreshBtn: { padding: '4px 10px', borderRadius: 6, fontSize: 14, cursor: 'pointer', color: '#94a3b8', border: '1px solid #334155', background: 'none' },
-  grid: { flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 3, overflowY: 'auto', padding: 3 },
-  photoCard: { aspectRatio: '4/3', cursor: 'pointer', overflow: 'hidden', background: '#1e293b', borderRadius: 4 },
-  viewerToolbar: { display: 'flex', alignItems: 'center', padding: '8px 12px', background: 'rgba(0,0,0,0.8)', color: '#fff' },
-  backBtn: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 6, fontSize: 13, color: '#fff', cursor: 'pointer', background: 'rgba(255,255,255,0.1)', border: 'none' },
 };
 
 export default PhotosApp;

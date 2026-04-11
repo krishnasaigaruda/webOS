@@ -20,32 +20,32 @@ const RemindersApp: React.FC<{ window: WindowState }> = () => {
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newRepeat, setNewRepeat] = useState<'none' | 'daily' | 'weekly'>('none');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const firedIdsRef = useRef<Set<string>>(new Set());
 
-  // Check reminders every 10 seconds
+  // Check reminders every 15 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
       const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       const currentDate = now.toISOString().split('T')[0];
 
-      setReminders(prev => prev.map(r => {
-        if (r.enabled && !r.fired && r.time === currentTime && r.date === currentDate) {
-          // Fire notification
-          addNotification({
-            title: 'Reminder',
-            message: r.title,
-            icon: 'reminders',
-            app: 'reminders',
-          });
-          // Play sound
-          playSound();
-          return { ...r, fired: true };
-        }
-        return r;
-      }));
-    }, 10000);
+      setReminders(prev => {
+        let changed = false;
+        const updated = prev.map(r => {
+          if (r.enabled && !r.fired && r.time === currentTime && r.date === currentDate && !firedIdsRef.current.has(r.id)) {
+            firedIdsRef.current.add(r.id);
+            addNotification({ title: 'Reminder', message: r.title, app: 'reminders' });
+            playSound();
+            changed = true;
+            return { ...r, fired: true };
+          }
+          return r;
+        });
+        return changed ? updated : prev;
+      });
+    }, 15000);
     return () => clearInterval(interval);
-  }, [addNotification]);
+  }, [addNotification]); // eslint-disable-line
 
   const playSound = () => {
     try {
@@ -86,7 +86,7 @@ const RemindersApp: React.FC<{ window: WindowState }> = () => {
       enabled: true,
       fired: false,
     }]);
-    addNotification({ title: 'Reminders', message: `Reminder set: "${newTitle}" at ${newTime}`, icon: 'reminders', app: 'reminders' });
+    addNotification({ title: 'Reminder Set', message: `"${newTitle}" scheduled for ${newDate} at ${newTime}`, app: 'reminders' });
     setNewTitle('');
     setShowAdd(false);
   };

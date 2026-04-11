@@ -342,6 +342,19 @@ export const TrashIcon: React.FC<IconProps> = ({ size = 48 }) => (
   </svg>
 );
 
+// Helper to generate simple app icons with a gradient background
+const mkIcon = (color: string, paths: string, hasStroke: boolean, text?: string): React.FC<IconProps> => {
+  const Comp: React.FC<IconProps> = ({ size = 48 }) => (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      <rect width="64" height="64" rx="14" fill={color} />
+      {paths && <path d={paths} fill={hasStroke ? 'none' : 'white'} stroke={hasStroke ? 'white' : 'none'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />}
+      {text && <text x="32" y="40" fill="white" fontSize={text.length > 2 ? '16' : '24'} fontWeight="700" textAnchor="middle">{text}</text>}
+      {!paths && !text && <circle cx="32" cy="32" r="12" fill="none" stroke="white" strokeWidth="2.5" opacity="0.9" />}
+    </svg>
+  );
+  return Comp;
+};
+
 const HelpIconComp: React.FC<IconProps> = ({ size = 48 }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
     <rect width="64" height="64" rx="14" fill="url(#helpGr)" />
@@ -409,6 +422,20 @@ export const APP_ICONS: Record<string, React.FC<IconProps>> = {
   'app-store': AppStoreIconComponent,
   'todo': TodoIconComp,
   'help': HelpIconComp,
+  'typing-test': mkIcon('#F59E0B', 'M16 20h32M22 32h20M18 44h28', false, 'Aa'),
+  'drawing-pad': mkIcon('#EC4899', 'M20 44L40 20M36 24l4-4 4 4-4 4', false),
+  'whiteboard': mkIcon('#94A3B8', 'M12 12h40v40H12zM20 28h24M20 36h16', true),
+  'quiz': mkIcon('#8B5CF6', '', false, '?!'),
+  'periodic-table': mkIcon('#06B6D4', 'M14 14h12v12H14zM26 14h12v12H26zM38 14h12v12H38zM14 26h12v12H14zM26 26h12v12H26z', true),
+  'metronome': mkIcon('#EF4444', 'M32 16v28M22 48h20M32 16l10 20', false),
+  'password-gen': mkIcon('#10B981', 'M20 28h24M20 36h16', true, '***'),
+  'qr-generator': mkIcon('#1F2937', 'M16 16h12v12H16zM36 16h12v12H36zM16 36h12v12H16zM36 40h4v4h-4zM44 36h4v4h-4zM40 44h8v4h-8z', true),
+  'translator': mkIcon('#3B82F6', '', false, 'Aa'),
+  'coin-flip': mkIcon('#D97706', '', false, '$'),
+  'dice-roller': mkIcon('#DC2626', 'M16 16h32v32H16z', true, '...'),
+  'graph-plotter': mkIcon('#7C3AED', 'M16 48L28 28L36 36L48 16', false),
+  'voice-recorder': mkIcon('#EF4444', '', false),
+  'tuner': mkIcon('#A855F7', 'M20 32h24M32 20v24', false),
 };
 
 export const AppIcon: React.FC<{ appId: string; size?: number }> = ({ appId, size = 48 }) => {

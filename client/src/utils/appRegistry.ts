@@ -32,7 +32,6 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   'document': { id: 'document', name: 'Document', icon: 'document', category: 'productivity', defaultWidth: 800, defaultHeight: 700, description: 'Rich text document editor' },
   'data-analyzer': { id: 'data-analyzer', name: 'Data Analyzer', icon: 'data-analyzer', category: 'ai', defaultWidth: 900, defaultHeight: 650, description: 'Analyze and visualize data' },
   'universal-preview': { id: 'universal-preview', name: 'Universal Preview', icon: 'universal-preview', category: 'utilities', defaultWidth: 800, defaultHeight: 600, description: 'Preview any file type' },
-  'tools-hub': { id: 'tools-hub', name: 'Tools Hub', icon: 'tools-hub', category: 'utilities', defaultWidth: 850, defaultHeight: 600, description: 'Collection of useful tools' },
   'camera': { id: 'camera', name: 'Camera', icon: 'camera', category: 'media', defaultWidth: 640, defaultHeight: 520, description: 'Take photos and videos' },
   'music': { id: 'music', name: 'Music', icon: 'music', category: 'media', defaultWidth: 600, defaultHeight: 500, description: 'Play and manage music' },
   'maps': { id: 'maps', name: 'Maps', icon: 'maps', category: 'utilities', defaultWidth: 900, defaultHeight: 650, description: 'Explore maps' },
@@ -45,3 +44,8 @@ export const getApp = (id: string): AppDefinition | undefined => APP_REGISTRY[id
 export const getAllApps = (): AppDefinition[] => Object.values(APP_REGISTRY);
 export const getAppsByCategory = (category: string): AppDefinition[] =>
   Object.values(APP_REGISTRY).filter(app => app.category === category);
+
+// Dynamically register an app (used by App Store on install)
+export const registerApp = (app: AppDefinition) => {
+  APP_REGISTRY[app.id] = app;
+};

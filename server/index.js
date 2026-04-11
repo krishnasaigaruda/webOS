@@ -315,6 +315,30 @@ app.post('/api/system/dnd', (req, res) => {
   });
 });
 
+// ============= WEB PROXY (bypass X-Frame-Options for browser) =============
+
+app.get('/api/proxy', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send('URL required');
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+    });
+    const contentType = response.headers.get('content-type') || 'text/html';
+    let body = await response.text();
+
+    // Rewrite relative URLs to absolute
+    const baseUrl = new URL(url);
+    const base = `${baseUrl.protocol}//${baseUrl.host}`;
+    body = body.replace(/(href|src|action)="\/(?!\/)/g, `$1="${base}/`);
+
+    res.setHeader('Content-Type', contentType);
+    res.send(body);
+  } catch (err) {
+    res.status(502).send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#94a3b8"><div style="text-align:center"><h2>Cannot load this page</h2><p>${err.message}</p><p style="opacity:0.5">${url}</p></div></body></html>`);
+  }
+});
+
 // ============= AI API (Pollinations.ai proxy, same as Orbix AI) =============
 
 function cleanAIResponse(text) {
