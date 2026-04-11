@@ -44,7 +44,6 @@ app.get('/api/fs/list', (req, res) => {
         const fullPath = path.join(dirPath, item.name);
         let stats;
         try { stats = fs.lstatSync(fullPath); } catch { stats = null; }
-        // Treat .app bundles as files (not navigable directories)
         const isApp = item.name.endsWith('.app');
         const isDir = item.isDirectory() || (item.isSymbolicLink() && stats?.isDirectory());
         return {
@@ -59,6 +58,27 @@ app.get('/api/fs/list', (req, res) => {
       });
     res.json(result);
   } catch (err) {
+    // Fallback for protected directories like ~/.Trash - use ls command
+    if (err.code === 'EPERM' || err.code === 'EACCES') {
+      exec(`ls -1 "${dirPath}" 2>/dev/null`, (execErr, stdout) => {
+        if (execErr || !stdout.trim()) return res.json([]);
+        const names = stdout.trim().split('\n').filter(n => n && !n.startsWith('.'));
+        const result = names.map(name => {
+          const fullPath = path.join(dirPath, name);
+          const isApp = name.endsWith('.app');
+          let isDir = false;
+          let size = 0;
+          try {
+            const s = fs.lstatSync(fullPath);
+            isDir = s.isDirectory();
+            size = s.size;
+          } catch {}
+          return { name, path: fullPath, isDirectory: isApp ? false : isDir, size, modified: new Date(), created: new Date(), mimeType: isDir ? 'directory' : mime.lookup(name) || 'application/octet-stream' };
+        });
+        res.json(result);
+      });
+      return;
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -261,6 +281,44 @@ app.post('/api/system/exec', (req, res) => {
       error: err ? err.message : null,
       exitCode: err ? err.code : 0
     });
+  });
+});
+
+// ============= TRASH API (uses AppleScript for macOS permissions) =============
+
+app.get('/api/trash/list', (req, res) => {
+  exec(`osascript -e 'set output to ""
+tell application "Finder"
+  set trashItems to every item of trash
+  repeat with i in trashItems
+    set itemName to name of i
+    set itemKind to kind of i
+    set output to output & itemName & "|||" & itemKind & "\\n"
+  end repeat
+end tell
+return output'`, (err, stdout) => {
+    if (err) return res.json([]);
+    const lines = stdout.trim().split('\n').filter(l => l.trim());
+    const items = lines.map(line => {
+      const [name, kind] = line.split('|||');
+      const isDir = kind && (kind.toLowerCase().includes('folder') || kind.toLowerCase().includes('directory'));
+      return {
+        name: (name || '').trim(),
+        path: path.join(HOME, '.Trash', (name || '').trim()),
+        isDirectory: isDir || false,
+        size: 0,
+        modified: new Date(),
+        created: new Date(),
+        mimeType: isDir ? 'directory' : mime.lookup((name || '').trim()) || 'application/octet-stream',
+      };
+    }).filter(i => i.name);
+    res.json(items);
+  });
+});
+
+app.post('/api/trash/empty', (req, res) => {
+  exec(`osascript -e 'tell application "Finder" to empty trash'`, (err) => {
+    res.json({ success: !err });
   });
 });
 

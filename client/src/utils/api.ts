@@ -62,6 +62,12 @@ export const api = {
       fetch(`${API_BASE}/system/dnd`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }).then(r => r.json()),
   },
 
+  // Trash
+  trash: {
+    list: () => fetch(`${API_BASE}/trash/list`).then(r => r.json()),
+    empty: () => fetch(`${API_BASE}/trash/empty`, { method: 'POST' }).then(r => r.json()),
+  },
+
   // AI
   ai: {
     chat: (messages: Array<{ role: string; content: string }>) =>

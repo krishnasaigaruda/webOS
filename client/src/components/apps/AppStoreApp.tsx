@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { WindowState, useStore } from '../../store/useStore';
-import { registerApp } from '../../utils/appRegistry';
+import { registerApp, getAllApps } from '../../utils/appRegistry';
+import { saveInstalledApps } from '../../store/useStore';
 import { AppIcon } from '../../utils/icons';
 
 interface StoreApp {
@@ -49,7 +50,12 @@ const CATEGORIES = ['All', 'Discover', 'Productivity', 'Developer Tools', 'Utili
 const AppStoreApp: React.FC<{ window: WindowState }> = () => {
   const [activeCategory, setActiveCategory] = useState('Discover');
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
-  const [installed, setInstalled] = useState<Set<string>>(new Set(STORE_APPS.filter(a => a.installed).map(a => a.id)));
+  // Check which apps are installed (from default + restored from IndexedDB)
+  const [installed, setInstalled] = useState<Set<string>>(() => {
+    const registeredIds = new Set(getAllApps().map(a => a.id));
+    const defaultInstalled = STORE_APPS.filter(a => a.installed).map(a => a.id);
+    return new Set([...defaultInstalled, ...Array.from(registeredIds)].filter(id => STORE_APPS.some(sa => sa.id === id)));
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const { openWindow, addNotification } = useStore();
 
@@ -66,6 +72,8 @@ const AppStoreApp: React.FC<{ window: WindowState }> = () => {
       description: app.description,
     });
     addNotification({ title: 'App Store', message: `${app.name} installed successfully`, app: 'app-store' });
+    // Persist all installed apps to IndexedDB
+    saveInstalledApps(getAllApps());
   };
 
   const handleOpen = (app: StoreApp) => {

@@ -57,10 +57,12 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [newItemName, setNewItemName] = useState('');
   const { openWindow, showContextMenu, updateWindow, addNotification } = useStore();
 
-  const loadFiles = useCallback(async (path: string) => {
+  const loadFiles = useCallback(async (dirPath: string) => {
     setLoading(true);
     try {
-      const data = await api.fs.list(path);
+      // Use special trash API for ~/.Trash
+      const isTrash = dirPath.includes('.Trash');
+      const data = isTrash ? await api.trash.list() : await api.fs.list(dirPath);
       setFiles(data.sort((a: FileItem, b: FileItem) => {
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;

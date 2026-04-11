@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { saveState, loadState } from '../utils/persistence';
+import { registerApp, AppDefinition } from '../utils/appRegistry';
 
 export interface WindowState {
   id: string;
@@ -263,3 +265,90 @@ export const useStore = create<OSStore>((set, get) => ({
   dockApps: ['finder', 'textedit', 'code-editor', 'calculator', 'calendar', 'browser', 'photos', 'ai-chat', 'music', 'settings'],
   setDockApps: (apps) => set({ dockApps: apps }),
 }));
+
+// ============= IndexedDB Persistence =============
+
+// Keys to persist
+const PERSIST_KEYS = [
+  'isLoggedIn', 'currentUser', 'theme', 'accentColor', 'wallpaper',
+  'dockApps', 'wifi', 'bluetooth', 'doNotDisturb', 'airplaneMode',
+  'brightness', 'volume', 'notifications', 'desktopCount', 'currentDesktop',
+] as const;
+
+// Debounced save
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function persistState() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const state = useStore.getState();
+    const toSave: Record<string, any> = {};
+    for (const key of PERSIST_KEYS) {
+      toSave[key] = (state as any)[key];
+    }
+    // Save windows state (strip runtime fields)
+    toSave['savedWindows'] = state.windows.map(w => ({
+      appId: w.appId, title: w.title, x: w.x, y: w.y,
+      width: w.width, height: w.height, minWidth: w.minWidth, minHeight: w.minHeight,
+      isMinimized: w.isMinimized, isMaximized: w.isMaximized,
+      desktop: w.desktop, icon: w.icon, filePath: w.filePath,
+    }));
+    for (const [key, value] of Object.entries(toSave)) {
+      saveState(key, value);
+    }
+  }, 500);
+}
+
+// Subscribe to all state changes
+useStore.subscribe(persistState);
+
+// Save installed apps list separately
+export async function saveInstalledApps(apps: AppDefinition[]) {
+  await saveState('installedApps', apps.map(a => ({
+    id: a.id, name: a.name, icon: a.icon, category: a.category,
+    defaultWidth: a.defaultWidth, defaultHeight: a.defaultHeight, description: a.description,
+  })));
+}
+
+// Restore state from IndexedDB on app load
+export async function restoreState() {
+  try {
+    for (const key of PERSIST_KEYS) {
+      const value = await loadState(key);
+      if (value !== undefined) {
+        useStore.setState({ [key]: value } as any);
+      }
+    }
+    // Restore windows
+    const savedWindows = await loadState('savedWindows');
+    if (savedWindows && Array.isArray(savedWindows) && savedWindows.length > 0) {
+      let zIdx = 100;
+      const restoredWindows: WindowState[] = savedWindows.map((w: any, i: number) => ({
+        id: `restored-${i}-${Date.now()}`,
+        appId: w.appId,
+        title: w.title,
+        x: w.x || 100,
+        y: w.y || 50,
+        width: w.width || 800,
+        height: w.height || 600,
+        minWidth: w.minWidth || 400,
+        minHeight: w.minHeight || 300,
+        isMinimized: w.isMinimized || false,
+        isMaximized: w.isMaximized || false,
+        isActive: i === savedWindows.length - 1,
+        zIndex: ++zIdx,
+        desktop: w.desktop || 0,
+        icon: w.icon || w.appId,
+        filePath: w.filePath,
+      }));
+      useStore.setState({ windows: restoredWindows, nextZIndex: zIdx + 1 });
+    }
+    // Restore installed apps
+    const installedApps = await loadState('installedApps');
+    if (installedApps && Array.isArray(installedApps)) {
+      for (const app of installedApps) {
+        registerApp(app);
+      }
+    }
+  } catch {}
+}

@@ -117,8 +117,8 @@ const Dock: React.FC = () => {
                   if (window.confirm('Are you sure you want to permanently erase the items in the Trash?')) {
                     try {
                       const { api } = await import('../../utils/api');
-                      await api.system.exec('rm -rf ~/.Trash/*');
-                      useStore.getState().addNotification({ title: 'Trash', message: 'Trash emptied', icon: 'finder', app: 'finder' });
+                      await api.trash.empty();
+                      useStore.getState().addNotification({ title: 'Trash', message: 'Trash emptied', app: 'finder' });
                     } catch {}
                   }
                 }},
