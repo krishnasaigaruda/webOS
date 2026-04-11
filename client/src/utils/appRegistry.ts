@@ -1,0 +1,46 @@
+export interface AppDefinition {
+  id: string;
+  name: string;
+  icon: string;
+  category: 'productivity' | 'utilities' | 'media' | 'system' | 'ai' | 'development';
+  defaultWidth?: number;
+  defaultHeight?: number;
+  minWidth?: number;
+  minHeight?: number;
+  description?: string;
+}
+
+export const APP_REGISTRY: Record<string, AppDefinition> = {
+  'finder': { id: 'finder', name: 'Finder', icon: 'finder', category: 'system', defaultWidth: 900, defaultHeight: 600, description: 'Browse and manage your files' },
+  'textedit': { id: 'textedit', name: 'TextEdit', icon: 'textedit', category: 'productivity', defaultWidth: 700, defaultHeight: 500, description: 'Simple text editor' },
+  'terminal': { id: 'terminal', name: 'Terminal', icon: 'terminal', category: 'development', defaultWidth: 700, defaultHeight: 450, description: 'Command line interface' },
+  'code-editor': { id: 'code-editor', name: 'Code Editor', icon: 'code-editor', category: 'development', defaultWidth: 1000, defaultHeight: 700, description: 'Professional code editor' },
+  'calculator': { id: 'calculator', name: 'Calculator', icon: 'calculator', category: 'utilities', defaultWidth: 320, defaultHeight: 500, minWidth: 320, minHeight: 500, description: 'Perform calculations' },
+  'calendar': { id: 'calendar', name: 'Calendar', icon: 'calendar', category: 'productivity', defaultWidth: 800, defaultHeight: 600, description: 'Calendar and events' },
+  'todo': { id: 'todo', name: 'To Do', icon: 'todo', category: 'productivity', defaultWidth: 400, defaultHeight: 550, description: 'Keep track of tasks' },
+  'reminders': { id: 'reminders', name: 'Reminders', icon: 'reminders', category: 'productivity', defaultWidth: 450, defaultHeight: 550, description: 'Set reminders with notifications' },
+  'notes': { id: 'notes', name: 'Notes', icon: 'notes', category: 'productivity', defaultWidth: 600, defaultHeight: 500, description: 'Quick notes and lists' },
+  'clock': { id: 'clock', name: 'Clock', icon: 'clock', category: 'utilities', defaultWidth: 400, defaultHeight: 500, description: 'World clock, timer, alarm' },
+  'weather': { id: 'weather', name: 'Weather', icon: 'weather', category: 'utilities', defaultWidth: 500, defaultHeight: 550, description: 'Current weather and forecast' },
+  'photos': { id: 'photos', name: 'Photos', icon: 'photos', category: 'media', defaultWidth: 900, defaultHeight: 600, description: 'View and organize photos' },
+  'browser': { id: 'browser', name: 'Web Browser', icon: 'browser', category: 'utilities', defaultWidth: 1000, defaultHeight: 700, description: 'Browse the web' },
+  'settings': { id: 'settings', name: 'Settings', icon: 'settings', category: 'system', defaultWidth: 800, defaultHeight: 600, description: 'System preferences' },
+  'ai-chat': { id: 'ai-chat', name: 'AI Assistant', icon: 'ai-chat', category: 'ai', defaultWidth: 500, defaultHeight: 650, description: 'AI-powered assistant' },
+  'dictionary': { id: 'dictionary', name: 'Dictionary', icon: 'dictionary', category: 'utilities', defaultWidth: 550, defaultHeight: 500, description: 'Look up word definitions' },
+  'spreadsheet': { id: 'spreadsheet', name: 'Spreadsheet', icon: 'spreadsheet', category: 'productivity', defaultWidth: 1000, defaultHeight: 650, description: 'Create and edit spreadsheets' },
+  'presentation': { id: 'presentation', name: 'Presentation', icon: 'presentation', category: 'productivity', defaultWidth: 1000, defaultHeight: 700, description: 'Create presentations' },
+  'document': { id: 'document', name: 'Document', icon: 'document', category: 'productivity', defaultWidth: 800, defaultHeight: 700, description: 'Rich text document editor' },
+  'data-analyzer': { id: 'data-analyzer', name: 'Data Analyzer', icon: 'data-analyzer', category: 'ai', defaultWidth: 900, defaultHeight: 650, description: 'Analyze and visualize data' },
+  'universal-preview': { id: 'universal-preview', name: 'Universal Preview', icon: 'universal-preview', category: 'utilities', defaultWidth: 800, defaultHeight: 600, description: 'Preview any file type' },
+  'tools-hub': { id: 'tools-hub', name: 'Tools Hub', icon: 'tools-hub', category: 'utilities', defaultWidth: 850, defaultHeight: 600, description: 'Collection of useful tools' },
+  'camera': { id: 'camera', name: 'Camera', icon: 'camera', category: 'media', defaultWidth: 640, defaultHeight: 520, description: 'Take photos and videos' },
+  'music': { id: 'music', name: 'Music', icon: 'music', category: 'media', defaultWidth: 600, defaultHeight: 500, description: 'Play and manage music' },
+  'maps': { id: 'maps', name: 'Maps', icon: 'maps', category: 'utilities', defaultWidth: 900, defaultHeight: 650, description: 'Explore maps' },
+  'activity-monitor': { id: 'activity-monitor', name: 'Activity Monitor', icon: 'activity-monitor', category: 'system', defaultWidth: 700, defaultHeight: 450, description: 'Monitor system resources' },
+  'app-store': { id: 'app-store', name: 'App Store', icon: 'app-store', category: 'system', defaultWidth: 900, defaultHeight: 650, description: 'Discover and install apps' },
+};
+
+export const getApp = (id: string): AppDefinition | undefined => APP_REGISTRY[id];
+export const getAllApps = (): AppDefinition[] => Object.values(APP_REGISTRY);
+export const getAppsByCategory = (category: string): AppDefinition[] =>
+  Object.values(APP_REGISTRY).filter(app => app.category === category);
