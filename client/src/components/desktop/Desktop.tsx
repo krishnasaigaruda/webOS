@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useStore } from '../../store/useStore';
 import MenuBar from './MenuBar';
 import Dock from './Dock';
@@ -9,6 +9,7 @@ import SpotlightSearch from '../system/SpotlightSearch';
 import NotificationCenter from '../system/NotificationCenter';
 import WidgetPanel from '../system/WidgetPanel';
 import DesktopWidgets from './DesktopWidgets';
+import SetupWizard from '../system/SetupWizard';
 import { FinderIcon } from '../../utils/icons';
 
 const WALLPAPERS: Record<string, string> = {
@@ -30,6 +31,21 @@ const Desktop: React.FC = () => {
     showControlCenter, showNotificationCenter, showSpotlight, showWidgets,
     toggleSpotlight, openWindow, addNotification,
   } = useStore();
+  const justLoggedIn = useStore(s => s.justLoggedIn);
+  const clearJustLoggedIn = useStore(s => s.clearJustLoggedIn);
+  const [needsSetup, setNeedsSetup] = useState(justLoggedIn);
+
+  // Only show setup wizard if user just logged in fresh (not from restore)
+  useEffect(() => {
+    if (justLoggedIn) {
+      setNeedsSetup(true);
+    }
+  }, [justLoggedIn]);
+
+  const handleSetupComplete = () => {
+    setNeedsSetup(false);
+    clearJustLoggedIn();
+  };
 
   const handleDesktopContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -142,6 +158,7 @@ const Desktop: React.FC = () => {
       {showSpotlight && <SpotlightSearch />}
       {showNotificationCenter && <NotificationCenter />}
       {showWidgets && <WidgetPanel />}
+      {needsSetup && <SetupWizard onComplete={handleSetupComplete} />}
     </div>
   );
 };

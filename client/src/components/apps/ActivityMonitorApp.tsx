@@ -1,32 +1,86 @@
 import React, { useState, useEffect } from 'react';
-import { WindowState, useStore } from '../../store/useStore';
-import { api } from '../../utils/api';
+import { WindowState } from '../../store/useStore';
+
+interface SystemStats {
+  cpu: { usage: number; perCore: number[]; count: number; model: string };
+  memory: { total: number; free: number; used: number };
+  uptime: number;
+  processes: Array<{ user: string; pid: string; cpu: number; mem: number; command: string }>;
+  disk: { total: string; used: string; free: string; percent: string };
+  hostname: string;
+  platform: string;
+  arch: string;
+}
 
 const ActivityMonitorApp: React.FC<{ window: WindowState }> = () => {
-  const [sysInfo, setSysInfo] = useState<any>(null);
-  const [tab, setTab] = useState<'cpu' | 'memory' | 'processes'>('cpu');
-  const [cpuHistory, setCpuHistory] = useState<number[]>(Array(30).fill(0));
-  const { windows } = useStore();
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [tab, setTab] = useState<'cpu' | 'memory' | 'disk' | 'processes'>('cpu');
+  const [cpuHistory, setCpuHistory] = useState<number[]>(Array(40).fill(0));
+  const [memHistory, setMemHistory] = useState<number[]>(Array(40).fill(0));
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/system/stats');
+      const data = await res.json();
+      setStats(data);
+      setCpuHistory(prev => [...prev.slice(1), data.cpu.usage]);
+      const memPercent = Math.round((data.memory.used / data.memory.total) * 100);
+      setMemHistory(prev => [...prev.slice(1), memPercent]);
+    } catch {}
+  };
 
   useEffect(() => {
-    api.system.info().then(setSysInfo).catch(() => {});
-    const interval = setInterval(() => {
-      const usage = Math.random() * 30 + 10;
-      setCpuHistory(prev => [...prev.slice(1), usage]);
-    }, 1000);
+    fetchStats();
+    const interval = setInterval(fetchStats, 3000);
     return () => clearInterval(interval);
   }, []);
 
-  const memUsed = sysInfo ? ((sysInfo.totalMemory - sysInfo.freeMemory) / sysInfo.totalMemory * 100).toFixed(1) : 0;
-  const memTotal = sysInfo ? (sysInfo.totalMemory / (1024 ** 3)).toFixed(1) : 0;
-  const memFree = sysInfo ? (sysInfo.freeMemory / (1024 ** 3)).toFixed(1) : 0;
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+  };
+
+  const formatUptime = (seconds: number) => {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${d}d ${h}h ${m}m`;
+  };
+
+  const renderChart = (data: number[], color: string, label: string, value: string) => (
+    <div style={{ background: '#1e293b', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 22, fontWeight: 300, color }}>{value}</span>
+      </div>
+      <svg width="100%" height="80" viewBox="0 0 400 80" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={`M0,80 ${data.map((v, i) => `L${i * (400 / (data.length - 1))},${80 - v * 0.8}`).join(' ')} L400,80 Z`} fill={`url(#grad-${label})`} />
+        <path d={`M0,${80 - data[0] * 0.8} ${data.map((v, i) => `L${i * (400 / (data.length - 1))},${80 - v * 0.8}`).join(' ')}`} fill="none" stroke={color} strokeWidth="2" />
+      </svg>
+    </div>
+  );
+
+  if (!stats) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#0f172a', color: '#64748b' }}>Loading system stats...</div>;
+
+  const memPercent = Math.round((stats.memory.used / stats.memory.total) * 100);
+  const diskPercent = parseInt(stats.disk.percent) || 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={styles.tabs}>
-        {(['cpu', 'memory', 'processes'] as const).map(t => (
-          <button key={t} style={{ ...styles.tab, ...(tab === t ? styles.activeTab : {}) }} onClick={() => setTab(t)}>
-            {t === 'cpu' ? 'CPU' : t === 'memory' ? 'Memory' : 'Processes'}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a', color: '#e2e8f0' }}>
+      {/* Tabs */}
+      <div style={st.tabs}>
+        {(['cpu', 'memory', 'disk', 'processes'] as const).map(t => (
+          <button key={t} style={{ ...st.tab, ...(tab === t ? st.activeTab : {}) }} onClick={() => setTab(t)}>
+            {t === 'cpu' ? 'CPU' : t === 'memory' ? 'Memory' : t === 'disk' ? 'Disk' : 'Processes'}
           </button>
         ))}
       </div>
@@ -34,81 +88,96 @@ const ActivityMonitorApp: React.FC<{ window: WindowState }> = () => {
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
         {tab === 'cpu' && (
           <div>
-            <h3 style={{ marginBottom: 12 }}>CPU Usage</h3>
-            {/* Mini chart */}
-            <div style={styles.chart}>
-              <svg width="100%" height="120" viewBox="0 0 300 120">
-                <defs>
-                  <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d={`M0,120 ${cpuHistory.map((v, i) => `L${i * 10},${120 - v * 1.2}`).join(' ')} L300,120 Z`}
-                  fill="url(#cpuGrad)"
-                />
-                <path
-                  d={`M0,${120 - cpuHistory[0] * 1.2} ${cpuHistory.map((v, i) => `L${i * 10},${120 - v * 1.2}`).join(' ')}`}
-                  fill="none"
-                  stroke="var(--accent)"
-                  strokeWidth="2"
-                />
-              </svg>
+            {renderChart(cpuHistory, '#3b82f6', 'CPU Usage', `${stats.cpu.usage}%`)}
+            <div style={st.infoGrid}>
+              <InfoRow label="Model" value={stats.cpu.model.split('@')[0].trim()} />
+              <InfoRow label="Cores" value={`${stats.cpu.count}`} />
+              <InfoRow label="Architecture" value={stats.arch} />
+              <InfoRow label="System Uptime" value={formatUptime(stats.uptime)} />
             </div>
-            <div style={styles.stat}>
-              <span>Current CPU</span>
-              <span style={{ fontWeight: 600 }}>{cpuHistory[cpuHistory.length - 1].toFixed(1)}%</span>
-            </div>
-            <div style={styles.stat}>
-              <span>CPU Cores</span>
-              <span>{sysInfo?.cpus || '--'}</span>
-            </div>
-            <div style={styles.stat}>
-              <span>Architecture</span>
-              <span>{sysInfo?.arch || '--'}</span>
-            </div>
-            <div style={styles.stat}>
-              <span>System Uptime</span>
-              <span>{sysInfo ? formatUptime(sysInfo.uptime) : '--'}</span>
-            </div>
+            {stats.cpu.perCore.length > 1 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Per Core</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
+                  {stats.cpu.perCore.map((usage, i) => (
+                    <div key={i} style={{ background: '#1e293b', borderRadius: 8, padding: 10, textAlign: 'center' }}>
+                      <div style={{ fontSize: 18, fontWeight: 300, color: usage > 70 ? '#ef4444' : usage > 40 ? '#f59e0b' : '#3b82f6' }}>{usage}%</div>
+                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Core {i}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {tab === 'memory' && (
           <div>
-            <h3 style={{ marginBottom: 12 }}>Memory Usage</h3>
-            <div style={styles.memBar}>
-              <div style={{ ...styles.memUsed, width: `${memUsed}%` }} />
+            {renderChart(memHistory, '#8b5cf6', 'Memory Usage', `${memPercent}%`)}
+            <div style={st.infoGrid}>
+              <InfoRow label="Total" value={formatBytes(stats.memory.total)} />
+              <InfoRow label="Used" value={formatBytes(stats.memory.used)} />
+              <InfoRow label="Free" value={formatBytes(stats.memory.free)} />
             </div>
-            <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 14 }}>{memUsed}% Used</div>
-            <div style={styles.stat}><span>Total Memory</span><span>{memTotal} GB</span></div>
-            <div style={styles.stat}><span>Free Memory</span><span>{memFree} GB</span></div>
-            <div style={styles.stat}><span>Used Memory</span><span>{(Number(memTotal) - Number(memFree)).toFixed(1)} GB</span></div>
+            <div style={{ marginTop: 16, background: '#1e293b', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Memory Pressure</div>
+              <div style={{ height: 16, borderRadius: 8, background: '#334155', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${memPercent}%`, borderRadius: 8, background: memPercent > 80 ? 'linear-gradient(90deg, #ef4444, #dc2626)' : memPercent > 50 ? 'linear-gradient(90deg, #f59e0b, #eab308)' : 'linear-gradient(90deg, #22c55e, #16a34a)', transition: 'width 0.5s' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                <span>0 GB</span>
+                <span>{formatBytes(stats.memory.total)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'disk' && (
+          <div>
+            <div style={{ background: '#1e293b', borderRadius: 10, padding: 20, textAlign: 'center', marginBottom: 16 }}>
+              <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 16px' }}>
+                <svg width="140" height="140" viewBox="0 0 140 140">
+                  <circle cx="70" cy="70" r="60" fill="none" stroke="#334155" strokeWidth="12" />
+                  <circle cx="70" cy="70" r="60" fill="none" stroke={diskPercent > 80 ? '#ef4444' : '#3b82f6'} strokeWidth="12" strokeLinecap="round"
+                    strokeDasharray={`${diskPercent * 3.77} 377`} transform="rotate(-90 70 70)" style={{ transition: 'stroke-dasharray 0.5s' }} />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 28, fontWeight: 300 }}>{stats.disk.percent}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Used</div>
+                </div>
+              </div>
+            </div>
+            <div style={st.infoGrid}>
+              <InfoRow label="Total" value={stats.disk.total} />
+              <InfoRow label="Used" value={stats.disk.used} />
+              <InfoRow label="Available" value={stats.disk.free} />
+              <InfoRow label="Hostname" value={stats.hostname} />
+              <InfoRow label="Platform" value={`${stats.platform} ${stats.arch}`} />
+            </div>
           </div>
         )}
 
         {tab === 'processes' && (
           <div>
-            <h3 style={{ marginBottom: 12 }}>Running Applications ({windows.length})</h3>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 10 }}>{stats.processes.length} processes</div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={styles.th}>App</th>
-                  <th style={styles.th}>Title</th>
-                  <th style={styles.th}>Status</th>
+                  <th style={st.th}>PID</th>
+                  <th style={st.th}>Process</th>
+                  <th style={st.th}>User</th>
+                  <th style={{ ...st.th, textAlign: 'right' }}>CPU</th>
+                  <th style={{ ...st.th, textAlign: 'right' }}>MEM</th>
                 </tr>
               </thead>
               <tbody>
-                {windows.map(w => (
-                  <tr key={w.id} style={styles.tr}>
-                    <td style={styles.td}>{w.icon} {w.appId}</td>
-                    <td style={styles.td}>{w.title}</td>
-                    <td style={styles.td}>
-                      <span style={{ color: w.isMinimized ? 'var(--warning)' : 'var(--success)' }}>
-                        {w.isMinimized ? 'Minimized' : 'Active'}
-                      </span>
-                    </td>
+                {stats.processes.map((p, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={st.td}>{p.pid}</td>
+                    <td style={{ ...st.td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>{p.command}</td>
+                    <td style={{ ...st.td, color: '#64748b' }}>{p.user}</td>
+                    <td style={{ ...st.td, textAlign: 'right', color: p.cpu > 50 ? '#ef4444' : p.cpu > 10 ? '#f59e0b' : '#e2e8f0' }}>{p.cpu.toFixed(1)}%</td>
+                    <td style={{ ...st.td, textAlign: 'right', color: p.mem > 10 ? '#f59e0b' : '#e2e8f0' }}>{p.mem.toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -116,28 +185,32 @@ const ActivityMonitorApp: React.FC<{ window: WindowState }> = () => {
           </div>
         )}
       </div>
+
+      {/* Status bar */}
+      <div style={{ display: 'flex', gap: 16, padding: '6px 16px', fontSize: 11, color: '#64748b', borderTop: '1px solid #1e293b', background: '#0f172a' }}>
+        <span>CPU: {stats.cpu.usage}%</span>
+        <span>MEM: {memPercent}%</span>
+        <span>Disk: {stats.disk.percent}</span>
+        <span style={{ marginLeft: 'auto' }}>Uptime: {formatUptime(stats.uptime)}</span>
+      </div>
     </div>
   );
 };
 
-function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${d}d ${h}h ${m}m`;
-}
+const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
+    <span style={{ fontSize: 13, color: '#94a3b8' }}>{label}</span>
+    <span style={{ fontSize: 13, fontWeight: 500 }}>{value}</span>
+  </div>
+);
 
-const styles: Record<string, React.CSSProperties> = {
-  tabs: { display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' },
-  tab: { flex: 1, padding: '8px', textAlign: 'center', fontSize: 13, cursor: 'pointer', borderBottom: '2px solid transparent', color: 'var(--text-secondary)' },
-  activeTab: { borderBottomColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 600 },
-  chart: { background: 'var(--bg-secondary)', borderRadius: 8, padding: 8, marginBottom: 16, border: '1px solid var(--border)' },
-  stat: { display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 14 },
-  memBar: { height: 20, background: 'var(--bg-tertiary)', borderRadius: 10, overflow: 'hidden', marginBottom: 8 },
-  memUsed: { height: '100%', background: 'linear-gradient(90deg, var(--success), var(--warning))', borderRadius: 10, transition: 'width 0.3s' },
-  th: { padding: '8px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' },
-  tr: { borderBottom: '1px solid var(--border)' },
-  td: { padding: '8px 12px', fontSize: 13 },
+const st: Record<string, React.CSSProperties> = {
+  tabs: { display: 'flex', borderBottom: '1px solid #1e293b', background: '#0f172a' },
+  tab: { flex: 1, padding: '10px', textAlign: 'center', fontSize: 13, cursor: 'pointer', borderBottom: '2px solid transparent', color: '#64748b', background: 'none', border: 'none', borderBottomWidth: 2, borderBottomStyle: 'solid', borderBottomColor: 'transparent' },
+  activeTab: { borderBottomColor: '#3b82f6', color: '#3b82f6', fontWeight: 600 },
+  infoGrid: { background: '#1e293b', borderRadius: 10, padding: '4px 14px' },
+  th: { padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #334155' },
+  td: { padding: '6px 10px', fontSize: 12 },
 };
 
 export default ActivityMonitorApp;

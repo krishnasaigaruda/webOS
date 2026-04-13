@@ -106,19 +106,24 @@ const Dock: React.FC = () => {
         <div style={styles.separator} />
         <div style={styles.dockItemContainer}>
           <motion.div whileHover={{ scale: 1.3, y: -12 }} style={styles.dockItem}
-            onClick={() => openWindow('finder', 'Trash', 'finder', { filePath: `${process.env.HOME || '/Users/krishna'}/.Trash` })}
+            onClick={async () => {
+              const r = await fetch('http://localhost:3001/api/fs/root').then(r => r.json());
+              if (r.root) openWindow('finder', 'Trash', 'finder', { filePath: `${r.root}/.webos-trash` });
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
               showContextMenu(e.clientX, e.clientY - 120, [
-                { label: 'Open Trash', action: () => openWindow('finder', 'Trash', 'finder', { filePath: '/Users/krishna/.Trash' }) },
+                { label: 'Open Trash', action: async () => {
+                  const r = await fetch('http://localhost:3001/api/fs/root').then(r => r.json());
+                  if (r.root) openWindow('finder', 'Trash', 'finder', { filePath: `${r.root}/.webos-trash` });
+                } },
                 { separator: true, label: '' },
                 { label: 'Empty Trash...', action: async () => {
-                  if (window.confirm('Are you sure you want to permanently erase the items in the Trash?')) {
+                  if (window.confirm('Are you sure you want to permanently erase the items in the webOS Trash? This only removes webOS items, not your Mac files.')) {
                     try {
-                      const { api } = await import('../../utils/api');
-                      await api.trash.empty();
-                      useStore.getState().addNotification({ title: 'Trash', message: 'Trash emptied', app: 'finder' });
+                      await fetch('http://localhost:3001/api/fs/trash-empty', { method: 'POST' });
+                      useStore.getState().addNotification({ title: 'Trash', message: 'webOS Trash emptied', app: 'finder' });
                     } catch {}
                   }
                 }},

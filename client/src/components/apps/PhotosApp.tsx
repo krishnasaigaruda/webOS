@@ -12,14 +12,27 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const loadPhotos = async () => {
     setLoading(true);
     const allFiles: any[] = [];
-    for (const p of ['/Users/krishna/Pictures', '/Users/krishna/Desktop', '/Users/krishna/Downloads', '/Users/krishna/Documents']) {
+    const isImage = (name: string) => /\.(png|jpg|jpeg|gif|svg|webp|bmp|ico|heic|tiff)$/i.test(name);
+
+    // Recursively scan the webOS sandbox for images
+    const scan = async (dir: string, depth: number = 0) => {
+      if (depth > 6) return;
       try {
-        const files = await api.fs.list(p);
-        allFiles.push(...files.filter((f: any) =>
-          f.name.match(/\.(png|jpg|jpeg|gif|svg|webp|bmp|ico|heic|tiff)$/i)
-        ));
+        const files = await api.fs.list(dir);
+        if (!Array.isArray(files)) return;
+        for (const f of files) {
+          if (f.isDirectory) {
+            await scan(f.path, depth + 1);
+          } else if (isImage(f.name)) {
+            allFiles.push(f);
+          }
+        }
       } catch {}
-    }
+    };
+
+    // Fetch the configured webOS root
+    const rootRes = await fetch('http://localhost:3001/api/fs/root').then(r => r.json()).catch(() => ({}));
+    if (rootRes.root) await scan(rootRes.root);
     setPhotos(allFiles);
     setLoading(false);
   };
@@ -64,7 +77,7 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: '#64748b' }}>
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3"><rect x="6" y="10" width="36" height="28" rx="4"/><circle cx="18" cy="22" r="4"/><path d="M6 34l10-10 8 8 6-6 12 12"/></svg>
             <p>No photos found</p>
-            <p style={{ fontSize: 12 }}>Add images to ~/Pictures, ~/Desktop, or ~/Downloads</p>
+            <p style={{ fontSize: 12 }}>Import images to your webOS folder from Finder</p>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 3 }}>

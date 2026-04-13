@@ -18,13 +18,58 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const HOME = process.env.HOME || '/Users/krishna';
-const WEBOS_ROOT = path.join(HOME, 'Documents');
+// Config file stores the user-chosen "My Files" folder path
+const CONFIG_PATH = path.join(HOME, '.webos-config.json');
+
+function getConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    }
+  } catch {}
+  return {};
+}
+
+function saveConfig(cfg) {
+  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2)); return true; } catch { return false; }
+}
+
+// Get the current webOS root (user-chosen folder, or unset)
+function getWebosRoot() {
+  const cfg = getConfig();
+  return cfg.webosRoot || null;
+}
+
+// Hidden trash folder inside the sandbox
+function getWebosTrash() {
+  const root = getWebosRoot();
+  return root ? path.join(root, '.webos-trash') : null;
+}
+
+// Check if a path is inside the sandbox (prevents path traversal)
+function isInSandbox(p) {
+  const root = getWebosRoot();
+  if (!root) return false;
+  const resolved = path.resolve(p);
+  const rootResolved = path.resolve(root);
+  return resolved === rootResolved || resolved.startsWith(rootResolved + path.sep);
+}
+
+// Resolve a path and verify it's inside the sandbox. Returns null if not.
+function safePath(p) {
+  if (!p) return null;
+  try {
+    const resolved = path.resolve(p);
+    if (isInSandbox(resolved)) return resolved;
+    return null;
+  } catch { return null; }
+}
 
 // File upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dest = req.body.path || WEBOS_ROOT;
-    fs.mkdirSync(dest, { recursive: true });
+    const dest = safePath(req.body.path) || getWebosRoot();
+    if (dest) fs.mkdirSync(dest, { recursive: true });
     cb(null, dest);
   },
   filename: (req, file, cb) => cb(null, file.originalname)
@@ -33,8 +78,164 @@ const upload = multer({ storage });
 
 // ============= FILE SYSTEM API =============
 
-// List directory
-app.get('/api/fs/list', (req, res) => {
+// Get webOS root (returns null if not yet configured)
+app.get('/api/fs/root', (req, res) => {
+  res.json({ root: getWebosRoot() });
+});
+
+// Set the webOS root (called during setup)
+app.post('/api/fs/set-root', (req, res) => {
+  const { path: rootPath } = req.body;
+  if (!rootPath) return res.status(400).json({ error: 'Path required' });
+  try {
+    // Create the folder if it doesn't exist
+    fs.mkdirSync(rootPath, { recursive: true });
+    // Create the hidden trash folder
+    const trashPath = path.join(rootPath, '.webos-trash');
+    fs.mkdirSync(trashPath, { recursive: true });
+    // Save config
+    saveConfig({ webosRoot: rootPath });
+    res.json({ success: true, root: rootPath });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List webOS trash
+app.get('/api/fs/trash-list', (req, res) => {
+  const trashPath = getWebosTrash();
+  if (!trashPath || !fs.existsSync(trashPath)) return res.json([]);
+  try {
+    const items = fs.readdirSync(trashPath, { withFileTypes: true });
+    const result = items.map(item => {
+      const fullPath = path.join(trashPath, item.name);
+      let stats;
+      try { stats = fs.lstatSync(fullPath); } catch { stats = null; }
+      const isDir = item.isDirectory() || (item.isSymbolicLink() && stats?.isDirectory());
+      return {
+        name: item.name,
+        path: fullPath,
+        isDirectory: isDir,
+        size: stats?.size || 0,
+        modified: stats?.mtime || new Date(),
+        created: stats?.birthtime || new Date(),
+        mimeType: isDir ? 'directory' : mime.lookup(item.name) || 'application/octet-stream',
+      };
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Empty webOS trash (only removes symlinks and items in the trash folder)
+app.post('/api/fs/trash-empty', (req, res) => {
+  const trashPath = getWebosTrash();
+  if (!trashPath) return res.json({ success: false });
+  try {
+    const items = fs.readdirSync(trashPath);
+    for (const item of items) {
+      const itemPath = path.join(trashPath, item);
+      const stat = fs.lstatSync(itemPath);
+      if (stat.isSymbolicLink() || stat.isFile()) {
+        fs.unlinkSync(itemPath);
+      } else if (stat.isDirectory()) {
+        fs.rmSync(itemPath, { recursive: true });
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Native macOS folder picker using AppleScript
+app.post('/api/fs/pick-folder', (req, res) => {
+  const { prompt: promptText = 'Choose a folder', allowNew = true } = req.body || {};
+  const script = allowNew
+    ? `POSIX path of (choose folder with prompt "${promptText}")`
+    : `POSIX path of (choose folder with prompt "${promptText}")`;
+  exec(`osascript -e '${script}'`, (err, stdout) => {
+    if (err) return res.json({ cancelled: true });
+    const selectedPath = stdout.trim();
+    if (!selectedPath) return res.json({ cancelled: true });
+    // Strip trailing slash
+    const cleanPath = selectedPath.endsWith('/') ? selectedPath.slice(0, -1) : selectedPath;
+    res.json({ path: cleanPath, name: path.basename(cleanPath) });
+  });
+});
+
+// Native macOS file picker (supports files AND folders with multiple selection)
+app.post('/api/fs/pick-files', (req, res) => {
+  const { prompt: promptText = 'Choose files or folders' } = req.body || {};
+  // `choose file` with `invisibles` option lets the user navigate folders and pick files.
+  // For folder selection, we use `choose file name` won't work; instead we use this combined approach:
+  // Use `choose file` with "Use `Package` contents" = no, allowing folder navigation/selection.
+  const script = [
+    `try`,
+    `  set fileList to choose file with prompt "${promptText}" with multiple selections allowed without invisibles`,
+    `  set output to ""`,
+    `  repeat with f in fileList`,
+    `    set output to output & POSIX path of f & linefeed`,
+    `  end repeat`,
+    `  return output`,
+    `on error errMsg number errNum`,
+    `  if errNum is -128 then`,
+    `    return "__CANCELLED__"`,
+    `  end if`,
+    `  return ""`,
+    `end try`,
+  ];
+  const args = script.map(line => `-e '${line.replace(/'/g, "'\\''")}'`).join(' ');
+  exec(`osascript ${args}`, (err, stdout) => {
+    if (err || stdout.trim() === '__CANCELLED__') return res.json({ cancelled: true });
+    const paths = stdout.trim().split('\n').filter(p => p.trim());
+    res.json({ paths });
+  });
+});
+
+// Native macOS picker for files OR folders - presents choice then picks accordingly
+app.post('/api/fs/pick-any', (req, res) => {
+  const { type = 'files' } = req.body || {};
+  let script;
+  if (type === 'folders') {
+    script = [
+      `try`,
+      `  set folderList to choose folder with prompt "Choose folders" with multiple selections allowed`,
+      `  set output to ""`,
+      `  repeat with f in folderList`,
+      `    set output to output & POSIX path of f & linefeed`,
+      `  end repeat`,
+      `  return output`,
+      `on error errMsg number errNum`,
+      `  return "__CANCELLED__"`,
+      `end try`,
+    ];
+  } else {
+    script = [
+      `try`,
+      `  set fileList to choose file with prompt "Choose files" with multiple selections allowed without invisibles`,
+      `  set output to ""`,
+      `  repeat with f in fileList`,
+      `    set output to output & POSIX path of f & linefeed`,
+      `  end repeat`,
+      `  return output`,
+      `on error errMsg number errNum`,
+      `  return "__CANCELLED__"`,
+      `end try`,
+    ];
+  }
+  const args = script.map(line => `-e '${line.replace(/'/g, "'\\''")}'`).join(' ');
+  exec(`osascript ${args}`, (err, stdout) => {
+    if (err || stdout.trim() === '__CANCELLED__') return res.json({ cancelled: true });
+    const paths = stdout.trim().split('\n').filter(p => p.trim());
+    res.json({ paths });
+  });
+});
+
+// Browse Mac filesystem for import (user explicitly picks folders)
+// This is the ONLY endpoint that can see outside the sandbox
+app.get('/api/fs/browse', (req, res) => {
   const dirPath = req.query.path || HOME;
   try {
     const items = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -47,12 +248,95 @@ app.get('/api/fs/list', (req, res) => {
         const isApp = item.name.endsWith('.app');
         const isDir = item.isDirectory() || (item.isSymbolicLink() && stats?.isDirectory());
         return {
-          name: item.name,
-          path: fullPath,
+          name: item.name, path: fullPath,
           isDirectory: isApp ? false : isDir,
           size: stats?.size || 0,
           modified: stats?.mtime || new Date(),
-          created: stats?.birthtime || new Date(),
+          mimeType: isDir ? 'directory' : mime.lookup(item.name) || 'application/octet-stream'
+        };
+      });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import a file or folder from the Mac into the webOS sandbox (creates symlink)
+app.post('/api/fs/import', (req, res) => {
+  let { source, name } = req.body;
+  if (!source || !name) return res.status(400).json({ error: 'source and name required' });
+  // Strip trailing slashes (AppleScript folder picker adds them)
+  source = source.replace(/\/+$/, '');
+  const root = getWebosRoot();
+  if (!root) return res.status(400).json({ error: 'webOS not configured' });
+  try {
+    // Verify source exists
+    if (!fs.existsSync(source)) {
+      return res.status(404).json({ error: `Source not found: ${source}` });
+    }
+    // Ensure the parent directory exists in the sandbox
+    const dest = path.join(root, name);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    // Remove existing symlink/file at destination if present
+    try { fs.lstatSync(dest); fs.rmSync(dest, { recursive: true, force: true }); } catch {}
+    // Create a symlink so the user can work with the real file
+    fs.symlinkSync(source, dest);
+    res.json({ success: true, path: dest });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Remove an imported item (just removes the symlink, NOT the original file)
+app.post('/api/fs/unimport', (req, res) => {
+  const { name } = req.body;
+  const root = getWebosRoot();
+  if (!root) return res.status(400).json({ error: 'webOS not configured' });
+  const p = safePath(path.join(root, name));
+  if (!p) return res.status(403).json({ error: 'Outside sandbox' });
+  try {
+    const stat = fs.lstatSync(p);
+    if (stat.isSymbolicLink()) {
+      fs.unlinkSync(p);
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Not an imported item' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List directory (JAILED to webOS sandbox)
+app.get('/api/fs/list', (req, res) => {
+  const root = getWebosRoot();
+  if (!root) return res.json([]);
+  const requestedPath = req.query.path || root;
+  const dirPath = safePath(requestedPath);
+  if (!dirPath) {
+    return res.status(403).json({ error: 'Access denied: path outside webOS sandbox' });
+  }
+  try {
+    const items = fs.readdirSync(dirPath, { withFileTypes: true });
+    const result = items
+      // Hide dot files AND the webOS trash folder
+      .filter(item => !item.name.startsWith('.') && item.name !== '.webos-trash')
+      .map(item => {
+        const fullPath = path.join(dirPath, item.name);
+        // For symlinks, follow to the target to check if it's a directory
+        let targetStats;
+        try { targetStats = fs.statSync(fullPath); } catch { targetStats = null; }
+        let lstats;
+        try { lstats = fs.lstatSync(fullPath); } catch { lstats = null; }
+        const isApp = item.name.endsWith('.app');
+        const isDir = targetStats?.isDirectory() || false;
+        return {
+          name: item.name,
+          path: fullPath,
+          isDirectory: isApp ? false : isDir,
+          size: targetStats?.size || lstats?.size || 0,
+          modified: targetStats?.mtime || lstats?.mtime || new Date(),
+          created: targetStats?.birthtime || lstats?.birthtime || new Date(),
           mimeType: isDir ? 'directory' : mime.lookup(item.name) || 'application/octet-stream'
         };
       });
@@ -85,8 +369,8 @@ app.get('/api/fs/list', (req, res) => {
 
 // Read file
 app.get('/api/fs/read', (req, res) => {
-  const filePath = req.query.path;
-  if (!filePath) return res.status(400).json({ error: 'Path required' });
+  const filePath = safePath(req.query.path);
+  if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';
     const forceText = req.query.text === 'true';
@@ -127,11 +411,11 @@ app.get('/api/fs/read', (req, res) => {
 
 // Write file
 app.post('/api/fs/write', (req, res) => {
-  const { path: filePath, content } = req.body;
-  if (!filePath) return res.status(400).json({ error: 'Path required' });
+  const filePath = safePath(req.body.path);
+  if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, content, 'utf-8');
+    fs.writeFileSync(filePath, req.body.content || '', 'utf-8');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -140,7 +424,8 @@ app.post('/api/fs/write', (req, res) => {
 
 // Create directory
 app.post('/api/fs/mkdir', (req, res) => {
-  const { path: dirPath } = req.body;
+  const dirPath = safePath(req.body.path);
+  if (!dirPath) return res.status(403).json({ error: 'Access denied' });
   try {
     fs.mkdirSync(dirPath, { recursive: true });
     res.json({ success: true });
@@ -151,10 +436,13 @@ app.post('/api/fs/mkdir', (req, res) => {
 
 // Delete file/directory
 app.delete('/api/fs/delete', (req, res) => {
-  const filePath = req.query.path;
+  const filePath = safePath(req.query.path);
+  if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
-    const stats = fs.statSync(filePath);
-    if (stats.isDirectory()) {
+    const stats = fs.lstatSync(filePath);
+    if (stats.isSymbolicLink()) {
+      fs.unlinkSync(filePath); // Removes the symlink, not the target
+    } else if (stats.isDirectory()) {
       fs.rmSync(filePath, { recursive: true });
     } else {
       fs.unlinkSync(filePath);
@@ -167,7 +455,9 @@ app.delete('/api/fs/delete', (req, res) => {
 
 // Rename/move
 app.post('/api/fs/rename', (req, res) => {
-  const { oldPath, newPath } = req.body;
+  const oldPath = safePath(req.body.oldPath);
+  const newPath = safePath(req.body.newPath);
+  if (!oldPath || !newPath) return res.status(403).json({ error: 'Access denied' });
   try {
     fs.renameSync(oldPath, newPath);
     res.json({ success: true });
@@ -178,7 +468,9 @@ app.post('/api/fs/rename', (req, res) => {
 
 // Copy
 app.post('/api/fs/copy', (req, res) => {
-  const { source, destination } = req.body;
+  const source = safePath(req.body.source);
+  const destination = safePath(req.body.destination);
+  if (!source || !destination) return res.status(403).json({ error: 'Access denied' });
   try {
     fs.cpSync(source, destination, { recursive: true });
     res.json({ success: true });
@@ -194,8 +486,8 @@ app.post('/api/fs/upload', upload.single('file'), (req, res) => {
 
 // Serve files for preview
 app.get('/api/fs/serve', (req, res) => {
-  const filePath = req.query.path;
-  if (!filePath) return res.status(400).json({ error: 'Path required' });
+  const filePath = safePath(req.query.path);
+  if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
     res.sendFile(filePath);
   } catch (err) {
@@ -205,7 +497,8 @@ app.get('/api/fs/serve', (req, res) => {
 
 // Get file info
 app.get('/api/fs/info', (req, res) => {
-  const filePath = req.query.path;
+  const filePath = safePath(req.query.path);
+  if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
     const stats = fs.statSync(filePath);
     res.json({
@@ -222,10 +515,11 @@ app.get('/api/fs/info', (req, res) => {
   }
 });
 
-// Search files
+// Search files (jailed to sandbox)
 app.get('/api/fs/search', (req, res) => {
   const { query, path: searchPath } = req.query;
-  const dir = searchPath || HOME;
+  const dir = safePath(searchPath) || getWebosRoot();
+  if (!dir) return res.json([]);
   const results = [];
 
   function searchDir(dirPath, depth = 0) {
@@ -268,6 +562,58 @@ app.get('/api/system/info', (req, res) => {
     uptime: os.uptime(),
     user: os.userInfo().username,
     homeDir: HOME
+  });
+});
+
+// Get real-time system stats
+app.get('/api/system/stats', (req, res) => {
+  const os = require('os');
+  // Get CPU usage
+  const cpus = os.cpus();
+  const cpuUsage = cpus.map(cpu => {
+    const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
+    const idle = cpu.times.idle;
+    return Math.round(((total - idle) / total) * 100);
+  });
+  const avgCpu = Math.round(cpuUsage.reduce((a, b) => a + b, 0) / cpuUsage.length);
+
+  // Get top processes via ps
+  exec('ps aux --sort=-%cpu 2>/dev/null || ps aux -r 2>/dev/null | head -16', (err, stdout) => {
+    let processes = [];
+    if (stdout) {
+      const lines = stdout.trim().split('\n');
+      const header = lines[0];
+      processes = lines.slice(1, 16).map(line => {
+        const parts = line.trim().split(/\s+/);
+        return {
+          user: parts[0],
+          pid: parts[1],
+          cpu: parseFloat(parts[2]) || 0,
+          mem: parseFloat(parts[3]) || 0,
+          command: parts.slice(10).join(' ').split('/').pop() || parts.slice(10).join(' '),
+        };
+      }).filter(p => p.command);
+    }
+
+    // Disk usage
+    exec('df -h / | tail -1', (err2, diskOut) => {
+      let disk = { total: '0', used: '0', free: '0', percent: '0%' };
+      if (diskOut) {
+        const parts = diskOut.trim().split(/\s+/);
+        disk = { total: parts[1] || '0', used: parts[2] || '0', free: parts[3] || '0', percent: parts[4] || '0%' };
+      }
+
+      res.json({
+        cpu: { usage: avgCpu, perCore: cpuUsage, count: cpus.length, model: cpus[0]?.model || '' },
+        memory: { total: os.totalmem(), free: os.freemem(), used: os.totalmem() - os.freemem() },
+        uptime: os.uptime(),
+        processes,
+        disk,
+        hostname: os.hostname(),
+        platform: os.platform(),
+        arch: os.arch(),
+      });
+    });
   });
 });
 

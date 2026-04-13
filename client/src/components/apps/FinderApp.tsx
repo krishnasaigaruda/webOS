@@ -13,7 +13,6 @@ interface FileItem {
   mimeType: string;
 }
 
-const HOME = '/Users/krishna';
 
 // File type helpers
 const getExt = (name: string) => name.split('.').pop()?.toLowerCase() || '';
@@ -40,13 +39,28 @@ const getCompatibleApps = (ext: string) => {
 };
 
 const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
-  const [currentPath, setCurrentPath] = useState(win.filePath || HOME);
+  const [webosRoot, setWebosRoot] = useState<string>('');
+  const [currentPath, setCurrentPath] = useState(win.filePath || '');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [sidebarTab, setSidebarTab] = useState<'files' | 'webos'>('files');
-  const [history, setHistory] = useState<string[]>([win.filePath || HOME]);
+  const [history, setHistory] = useState<string[]>([win.filePath || '']);
   const [historyIndex, setHistoryIndex] = useState(0);
+
+  // Fetch the configured webOS root on mount
+  useEffect(() => {
+    fetch('http://localhost:3001/api/fs/root').then(r => r.json()).then(data => {
+      if (data.root) {
+        setWebosRoot(data.root);
+        if (!currentPath || (!currentPath.startsWith(data.root))) {
+          setCurrentPath(data.root);
+          setHistory([data.root]);
+        }
+      }
+    });
+  }, []); // eslint-disable-line
+  const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
@@ -60,9 +74,15 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const loadFiles = useCallback(async (dirPath: string) => {
     setLoading(true);
     try {
-      // Use special trash API for ~/.Trash
-      const isTrash = dirPath.includes('.Trash');
-      const data = isTrash ? await api.trash.list() : await api.fs.list(dirPath);
+      // Use webOS trash API for .webos-trash folder
+      const isWebosTrash = dirPath.endsWith('.webos-trash');
+      let data;
+      if (isWebosTrash) {
+        const res = await fetch('http://localhost:3001/api/fs/trash-list');
+        data = await res.json();
+      } else {
+        data = await api.fs.list(dirPath);
+      }
       setFiles(data.sort((a: FileItem, b: FileItem) => {
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;
@@ -123,12 +143,16 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
 
   const handleDelete = async (filePath: string) => {
     const fileName = filePath.split('/').pop() || '';
-    const trashPath = `${HOME}/.Trash/${fileName}`;
+    // Move to webOS trash (inside the sandbox, hidden folder `.webos-trash`)
+    // This only moves the symlink for imported items, not the real Mac file
     try {
-      await api.fs.rename(filePath, trashPath);
-    } catch {
-      try { await api.fs.copy(filePath, trashPath); await api.fs.delete(filePath); } catch { await api.fs.delete(filePath); }
-    }
+      const rootRes = await fetch('http://localhost:3001/api/fs/root');
+      const rootData = await rootRes.json();
+      if (rootData.root) {
+        const trashDest = `${rootData.root}/.webos-trash/${fileName}`;
+        await api.fs.rename(filePath, trashDest);
+      }
+    } catch {}
     loadFiles(currentPath);
     addNotification({ title: 'Finder', message: `${fileName} moved to Trash`, icon: 'finder' });
   };
@@ -175,18 +199,11 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const sidebarFavorites = [
-    { name: 'Desktop', path: `${HOME}/Desktop`, icon: 'desktop' },
-    { name: 'Documents', path: `${HOME}/Documents`, icon: 'docs' },
-    { name: 'Downloads', path: `${HOME}/Downloads`, icon: 'down' },
-    { name: 'Pictures', path: `${HOME}/Pictures`, icon: 'pics' },
-    { name: 'Applications', path: '/Applications', icon: 'apps' },
-  ];
+  const sidebarFavorites = webosRoot ? [
+    { name: 'My Files', path: webosRoot, icon: 'home' },
+  ] : [];
 
-  const sidebarLocations = [
-    { name: 'Macintosh HD', path: '/', icon: 'disk' },
-    { name: 'Home', path: HOME, icon: 'home' },
-  ];
+  const sidebarLocations: any[] = [];
 
   // Recursive search via server when query is entered
   useEffect(() => {
@@ -283,19 +300,32 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           </div>
           <div style={styles.pathBar}>
             {(() => {
-              // Only show selected file's parent path when a file is actually selected during search
               const displayPath = (searchResults !== null && selectedFile)
                 ? selectedFile.substring(0, selectedFile.lastIndexOf('/'))
                 : currentPath;
-              return displayPath.split('/').filter(Boolean).map((part, i, arr) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.2" style={{flexShrink:0}}><path d="M1 1l4 4-4 4"/></svg>}
-                  <span style={{ cursor: 'pointer', fontSize: 13, fontWeight: i === arr.length - 1 ? 600 : 400 }}
-                    onClick={() => { setSearchQuery(''); navigate('/' + arr.slice(0, i + 1).join('/')); }}>
-                    {part}
-                  </span>
-                </React.Fragment>
-              ));
+              // Hide the real sandbox path prefix - show "My Files" instead
+              if (!webosRoot) return null;
+              const isInSandbox = displayPath === webosRoot || displayPath.startsWith(webosRoot + '/');
+              if (!isInSandbox) return <span style={{ fontSize: 13 }}>{displayPath}</span>;
+
+              // Replace the root with "My Files"
+              const relative = displayPath === webosRoot ? '' : displayPath.substring(webosRoot.length + 1);
+              const isTrash = relative === '.webos-trash';
+              const segments = isTrash ? ['My Files', 'Trash'] : ['My Files', ...(relative ? relative.split('/') : [])];
+
+              return segments.map((part, i) => {
+                const isLast = i === segments.length - 1;
+                const segPath = i === 0 ? webosRoot : `${webosRoot}/${relative.split('/').slice(0, i).join('/')}`;
+                return (
+                  <React.Fragment key={i}>
+                    {i > 0 && <svg width="6" height="10" viewBox="0 0 6 10" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.2" style={{flexShrink:0}}><path d="M1 1l4 4-4 4"/></svg>}
+                    <span style={{ cursor: 'pointer', fontSize: 13, fontWeight: isLast ? 600 : 400 }}
+                      onClick={() => { setSearchQuery(''); navigate(segPath); }}>
+                      {part}
+                    </span>
+                  </React.Fragment>
+                );
+              });
             })()}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -313,6 +343,10 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
             </button>
             <button style={styles.toolBtn} onClick={handleCreateFile} title="New File">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="7" y1="5" x2="7" y2="9"/><line x1="5" y1="7" x2="9" y2="7"/></svg>
+            </button>
+            <button style={{ ...styles.toolBtn, background: 'var(--accent)', color: '#fff', padding: '0 10px', width: 'auto', fontSize: 12, gap: 5, display: 'flex', alignItems: 'center' }} onClick={() => setShowImport(true)} title="Import from Mac">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M7 1v8M4 6l3 3 3-3"/><path d="M2 11v1a1 1 0 001 1h8a1 1 0 001-1v-1"/></svg>
+              Import
             </button>
           </div>
         </div>
@@ -408,6 +442,123 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
             </div>
           </div>
         )}
+
+        {/* Import from Mac dialog */}
+        {showImport && <ImportDialog currentDir={currentPath} webosRoot={webosRoot} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); loadFiles(currentPath); }} />}
+      </div>
+    </div>
+  );
+};
+
+// Import dialog - uses native macOS file picker
+interface ImportItem { path: string; name: string; isFolder: boolean; }
+
+const getBaseName = (p: string): string => {
+  const trimmed = p.replace(/\/+$/, '');
+  return trimmed.split('/').pop() || trimmed;
+};
+
+const ImportDialog: React.FC<{ onClose: () => void; onImported: () => void; currentDir: string; webosRoot: string }> = ({ onClose, onImported, currentDir, webosRoot }) => {
+  const [pickedFiles, setPickedFiles] = useState<ImportItem[]>([]);
+  const [importing, setImporting] = useState(false);
+
+  const pickFiles = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/fs/pick-any', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'files' }),
+      });
+      const data = await res.json();
+      if (data.cancelled || !data.paths) return;
+      const items: ImportItem[] = data.paths.map((p: string) => ({
+        path: p.replace(/\/+$/, ''), name: getBaseName(p), isFolder: false,
+      }));
+      setPickedFiles(prev => [...prev, ...items]);
+    } catch {}
+  };
+
+  const pickFolder = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/fs/pick-any', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'folders' }),
+      });
+      const data = await res.json();
+      if (data.cancelled || !data.paths) return;
+      const items: ImportItem[] = data.paths.map((p: string) => ({
+        path: p.replace(/\/+$/, ''), name: getBaseName(p), isFolder: true,
+      }));
+      setPickedFiles(prev => [...prev, ...items]);
+    } catch {}
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    // Get the relative path inside the sandbox
+    const relDir = webosRoot && currentDir.startsWith(webosRoot)
+      ? currentDir.substring(webosRoot.length).replace(/^\//, '')
+      : '';
+    for (const item of pickedFiles) {
+      const name = relDir ? `${relDir}/${item.name}` : item.name;
+      await fetch('http://localhost:3001/api/fs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: item.path, name }),
+      });
+    }
+    setImporting(false);
+    onImported();
+  };
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }} onClick={onClose}>
+      <div style={{ width: 440, background: 'var(--bg-primary)', borderRadius: 14, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 600 }}>Import from Mac</h3>
+          <button style={{ fontSize: 18, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, lineHeight: 1 }} onClick={onClose}>×</button>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          Files will be imported to <strong style={{ color: 'var(--accent)' }}>{webosRoot && currentDir.startsWith(webosRoot) ? ('My Files' + currentDir.substring(webosRoot.length)) : 'My Files'}</strong>
+        </p>
+
+        {pickedFiles.length > 0 && (
+          <div style={{ padding: 12, borderRadius: 10, background: 'var(--input-bg)', border: '1px solid var(--border)', marginBottom: 14, maxHeight: 160, overflowY: 'auto' }}>
+            <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+              {pickedFiles.length} selected
+            </div>
+            {pickedFiles.map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 12, color: 'var(--text-primary)' }}>
+                {item.isFolder ? (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="#64B5F6"><path d="M1.5 4A1.5 1.5 0 013 2.5h3.5L8.5 5H13A1.5 1.5 0 0114.5 6.5v6A1.5 1.5 0 0113 14H3A1.5 1.5 0 011.5 12.5V4z"/></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor" opacity="0.5"><path d="M4 1h5l3 3v9a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z"/></svg>
+                )}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{item.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button style={{ flex: 1, padding: '10px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={pickFiles}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 1H3a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V5z"/><path d="M8 1v4h4"/></svg>
+            Choose Files...
+          </button>
+          <button style={{ flex: 1, padding: '10px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={pickFolder}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 4a1 1 0 011-1h3l1.5 1.5H11a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/></svg>
+            Choose Folder...
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button style={{ padding: '8px 18px', borderRadius: 7, fontSize: 13, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={onClose}>Cancel</button>
+          <button style={{ padding: '8px 18px', borderRadius: 7, fontSize: 13, background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontWeight: 600, border: 'none', opacity: pickedFiles.length > 0 && !importing ? 1 : 0.5 }}
+            onClick={handleImport} disabled={pickedFiles.length === 0 || importing}>
+            {importing ? 'Importing...' : `Import ${pickedFiles.length || ''}`}
+          </button>
+        </div>
       </div>
     </div>
   );

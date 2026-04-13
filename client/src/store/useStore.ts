@@ -44,9 +44,11 @@ export interface FileItem {
 interface OSStore {
   // Auth
   isLoggedIn: boolean;
+  justLoggedIn: boolean;
   currentUser: { name: string; email: string; avatar: string } | null;
   login: (name: string, email: string) => void;
   logout: () => void;
+  clearJustLoggedIn: () => void;
 
   // Windows
   windows: WindowState[];
@@ -134,10 +136,17 @@ export const useStore = create<OSStore>((set, get) => ({
   // Auth
   isLoggedIn: false,
   currentUser: null,
-  login: (name, email) => set({
-    isLoggedIn: true,
-    currentUser: { name, email, avatar: name.charAt(0).toUpperCase() }
-  }),
+  justLoggedIn: false,
+  login: (name, email) => {
+    // Mark as fresh login - triggers setup wizard
+    (window as any).__webos_fresh_login = true;
+    set({
+      isLoggedIn: true,
+      currentUser: { name, email, avatar: name.charAt(0).toUpperCase() },
+      justLoggedIn: true,
+    });
+  },
+  clearJustLoggedIn: () => set({ justLoggedIn: false }),
   logout: () => set({
     isLoggedIn: false,
     currentUser: null,
