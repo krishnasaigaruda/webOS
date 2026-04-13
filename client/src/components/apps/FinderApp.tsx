@@ -20,21 +20,32 @@ const isAppBundle = (name: string) => name.endsWith('.app');
 const isImageExt = (ext: string) => ['png','jpg','jpeg','gif','svg','webp','bmp','ico','heic','tiff'].includes(ext);
 const isVideoExt = (ext: string) => ['mp4','mov','avi','webm','mkv','m4v'].includes(ext);
 const isAudioExt = (ext: string) => ['mp3','wav','ogg','flac','aac','m4a','wma'].includes(ext);
-const isCodeExt = (ext: string) => ['js','ts','jsx','tsx','py','go','rs','c','cpp','h','java','rb','swift','html','css','json','xml','yaml','yml','toml','sh','sql','md','php','pl','lua','r','scala','kt'].includes(ext);
+const isHtmlExt = (ext: string) => ['html','htm'].includes(ext);
+const is3DExt = (ext: string) => ['glb','gltf','obj','stl','fbx','dae','3ds','ply'].includes(ext);
+const isSpreadsheetExt = (ext: string) => ['xlsx','xls','csv','ods','tsv','numbers'].includes(ext);
+const isDocumentExt = (ext: string) => ['docx','doc','odt','rtf','pages'].includes(ext);
+const isPdfExt = (ext: string) => ext === 'pdf';
+const isCodeExt = (ext: string) => ['js','ts','jsx','tsx','py','go','rs','c','cpp','h','java','rb','swift','css','json','xml','yaml','yml','toml','sh','sql','md','php','pl','lua','r','scala','kt'].includes(ext);
 const isMediaExt = (ext: string) => isImageExt(ext) || isVideoExt(ext) || isAudioExt(ext);
 
-// Compatible apps for "Open With > Browse"
+// Compatible apps for "Open With" menu
 const getCompatibleApps = (ext: string) => {
   const apps: Array<{id: string; name: string}> = [];
-  if (!isMediaExt(ext)) {
-    apps.push({ id: 'textedit', name: 'TextEdit' });
-    apps.push({ id: 'code-editor', name: 'Code Editor' });
-    apps.push({ id: 'document', name: 'Document' });
+  if (is3DExt(ext)) apps.push({ id: 'model-viewer', name: '3D Model Viewer' });
+  if (isSpreadsheetExt(ext)) { apps.push({ id: 'data-analyzer', name: 'Data Analyzer' }); apps.push({ id: 'spreadsheet', name: 'Spreadsheet' }); }
+  if (isDocumentExt(ext)) apps.push({ id: 'document', name: 'Document' });
+  if (isPdfExt(ext)) apps.push({ id: 'universal-preview', name: 'Universal Preview' });
+  if (isHtmlExt(ext)) apps.push({ id: 'browser', name: 'Browser' });
+  if (isImageExt(ext)) apps.push({ id: 'photos', name: 'Photos' });
+  if (isAudioExt(ext)) apps.push({ id: 'music', name: 'Music' });
+  if (isVideoExt(ext)) apps.push({ id: 'video-player', name: 'Video Player' });
+  // Text-editable for non-media / non-3D
+  if (!isMediaExt(ext) && !is3DExt(ext) && !isPdfExt(ext)) {
+    if (!apps.find(a => a.id === 'textedit')) apps.push({ id: 'textedit', name: 'TextEdit' });
+    if (!apps.find(a => a.id === 'code-editor')) apps.push({ id: 'code-editor', name: 'Code Editor' });
   }
-  if (isImageExt(ext)) {
-    apps.push({ id: 'photos', name: 'Photos' });
-  }
-  apps.push({ id: 'universal-preview', name: 'Universal Preview' });
+  // Universal Preview as fallback
+  if (!apps.find(a => a.id === 'universal-preview')) apps.push({ id: 'universal-preview', name: 'Universal Preview' });
   return apps;
 };
 
@@ -109,16 +120,27 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const goForward = () => { if (historyIndex < history.length - 1) { setHistoryIndex(historyIndex + 1); setCurrentPath(history[historyIndex + 1]); } };
 
   const handleDoubleClick = (file: FileItem) => {
-    // .app bundles - don't navigate into them
     if (isAppBundle(file.name)) return;
     if (file.isDirectory) { navigate(file.path); return; }
     const ext = getExt(file.name);
-    if (isImageExt(ext)) {
+    if (is3DExt(ext)) {
+      openWindow('model-viewer', file.name, 'model-viewer', { filePath: file.path });
+    } else if (isPdfExt(ext)) {
+      openWindow('document', file.name, 'document', { filePath: file.path });
+    } else if (isSpreadsheetExt(ext)) {
+      openWindow('spreadsheet', file.name, 'spreadsheet', { filePath: file.path });
+    } else if (isDocumentExt(ext)) {
+      openWindow('document', file.name, 'document', { filePath: file.path });
+    } else if (isHtmlExt(ext)) {
+      openWindow('browser', file.name, 'browser', { filePath: file.path });
+    } else if (isImageExt(ext)) {
       openWindow('photos', file.name, 'photos', { filePath: file.path });
-    } else if (isCodeExt(ext)) {
-      openWindow('code-editor', file.name, 'code-editor', { filePath: file.path });
     } else if (isAudioExt(ext)) {
       openWindow('music', file.name, 'music', { filePath: file.path });
+    } else if (isVideoExt(ext)) {
+      openWindow('video-player', file.name, 'video-player', { filePath: file.path });
+    } else if (isCodeExt(ext)) {
+      openWindow('code-editor', file.name, 'code-editor', { filePath: file.path });
     } else {
       openWindow('textedit', file.name, 'textedit', { filePath: file.path });
     }

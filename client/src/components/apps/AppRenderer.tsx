@@ -28,6 +28,8 @@ import UniversalPreviewApp from './UniversalPreviewApp';
 import ToolsHubApp from './ToolsHubApp';
 import DataAnalyzerApp from './DataAnalyzerApp';
 import HelpApp from './HelpApp';
+import ModelViewerApp from './ModelViewerApp';
+import VideoPlayerApp from './VideoPlayerApp';
 import ToolsIframeApp from './ToolsIframeApp';
 import { AppIcon } from '../../utils/icons';
 
@@ -57,6 +59,8 @@ const APP_COMPONENTS: Record<string, React.FC<{ window: WindowState }>> = {
   'activity-monitor': ActivityMonitorApp,
   'app-store': AppStoreApp,
   'help': HelpApp,
+  'model-viewer': ModelViewerApp,
+  'video-player': VideoPlayerApp,
   'universal-preview': UniversalPreviewApp,
   'tools-hub': ToolsHubApp,
   'data-analyzer': DataAnalyzerApp,

@@ -28,7 +28,6 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   'ai-chat': { id: 'ai-chat', name: 'AI Assistant', icon: 'ai-chat', category: 'ai', defaultWidth: 500, defaultHeight: 650, description: 'AI-powered assistant' },
   'dictionary': { id: 'dictionary', name: 'Dictionary', icon: 'dictionary', category: 'utilities', defaultWidth: 550, defaultHeight: 500, description: 'Look up word definitions' },
   'spreadsheet': { id: 'spreadsheet', name: 'Spreadsheet', icon: 'spreadsheet', category: 'productivity', defaultWidth: 1000, defaultHeight: 650, description: 'Create and edit spreadsheets' },
-  'presentation': { id: 'presentation', name: 'Presentation', icon: 'presentation', category: 'productivity', defaultWidth: 1000, defaultHeight: 700, description: 'Create presentations' },
   'document': { id: 'document', name: 'Document', icon: 'document', category: 'productivity', defaultWidth: 800, defaultHeight: 700, description: 'Rich text document editor' },
   'data-analyzer': { id: 'data-analyzer', name: 'Data Analyzer', icon: 'data-analyzer', category: 'ai', defaultWidth: 900, defaultHeight: 650, description: 'Analyze and visualize data' },
   'universal-preview': { id: 'universal-preview', name: 'Universal Preview', icon: 'universal-preview', category: 'utilities', defaultWidth: 800, defaultHeight: 600, description: 'Preview any file type' },
@@ -37,6 +36,8 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   'maps': { id: 'maps', name: 'Maps', icon: 'maps', category: 'utilities', defaultWidth: 900, defaultHeight: 650, description: 'Explore maps' },
   'activity-monitor': { id: 'activity-monitor', name: 'Activity Monitor', icon: 'activity-monitor', category: 'system', defaultWidth: 700, defaultHeight: 450, description: 'Monitor system resources' },
   'help': { id: 'help', name: 'Help', icon: 'help', category: 'system', defaultWidth: 800, defaultHeight: 600, description: 'webOS help and documentation' },
+  'model-viewer': { id: 'model-viewer', name: '3D Model Viewer', icon: 'model-viewer', category: 'media', defaultWidth: 900, defaultHeight: 650, description: 'View 3D models (glb, gltf, obj, stl, fbx)' },
+  'video-player': { id: 'video-player', name: 'Video Player', icon: 'video-player', category: 'media', defaultWidth: 900, defaultHeight: 650, description: 'Play video files' },
   'app-store': { id: 'app-store', name: 'App Store', icon: 'app-store', category: 'system', defaultWidth: 900, defaultHeight: 650, description: 'Discover and install apps' },
 };
 

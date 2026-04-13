@@ -355,6 +355,26 @@ const mkIcon = (color: string, paths: string, hasStroke: boolean, text?: string)
   return Comp;
 };
 
+const VideoPlayerIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#vpGr)" />
+    <defs><linearGradient id="vpGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#ef4444"/><stop offset="1" stopColor="#dc2626"/></linearGradient></defs>
+    <rect x="12" y="18" width="40" height="28" rx="3" fill="rgba(255,255,255,0.1)" stroke="white" strokeWidth="2"/>
+    <path d="M26 26 L26 38 L40 32 Z" fill="white"/>
+  </svg>
+);
+
+const ModelViewerIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#mvGr)" />
+    <defs><linearGradient id="mvGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#6366f1"/><stop offset="1" stopColor="#8b5cf6"/></linearGradient></defs>
+    <path d="M32 12 L50 22 L50 42 L32 52 L14 42 L14 22 Z" fill="none" stroke="white" strokeWidth="2" strokeLinejoin="round"/>
+    <path d="M32 12 L32 32 L50 22" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/>
+    <path d="M32 32 L14 22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+    <path d="M32 32 L32 52" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
 const HelpIconComp: React.FC<IconProps> = ({ size = 48 }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
     <rect width="64" height="64" rx="14" fill="url(#helpGr)" />
@@ -422,6 +442,8 @@ export const APP_ICONS: Record<string, React.FC<IconProps>> = {
   'app-store': AppStoreIconComponent,
   'todo': TodoIconComp,
   'help': HelpIconComp,
+  'model-viewer': ModelViewerIconComp,
+  'video-player': VideoPlayerIconComp,
   'typing-test': mkIcon('#F59E0B', 'M16 20h32M22 32h20M18 44h28', false, 'Aa'),
   'drawing-pad': mkIcon('#EC4899', 'M20 44L40 20M36 24l4-4 4 4-4 4', false),
   'whiteboard': mkIcon('#94A3B8', 'M12 12h40v40H12zM20 28h24M20 36h16', true),

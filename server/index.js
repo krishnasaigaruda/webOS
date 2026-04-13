@@ -376,29 +376,45 @@ app.get('/api/fs/read', (req, res) => {
     const forceText = req.query.text === 'true';
     const isTextLike = mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/javascript' || mimeType === 'application/xml' || mimeType === 'application/x-yaml';
 
-    // Always try to read as text first
+    // Check file size first - truncate large files
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+    const MAX_SIZE = 5 * 1024 * 1024; // 5 MB safe limit for display
+    const truncated = fileSize > MAX_SIZE;
+
+    const readTruncated = (encoding) => {
+      if (!truncated) return fs.readFileSync(filePath, encoding);
+      // Read only first MAX_SIZE bytes
+      const fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.alloc(MAX_SIZE);
+      fs.readSync(fd, buf, 0, MAX_SIZE, 0);
+      fs.closeSync(fd);
+      return buf.toString(encoding);
+    };
+
     if (isTextLike || forceText) {
       try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        return res.json({ content, mimeType });
+        const content = readTruncated('utf-8');
+        return res.json({ content, mimeType, size: fileSize, truncated });
       } catch {
-        // If utf-8 fails, try latin1 (reads any byte)
         try {
-          const content = fs.readFileSync(filePath, 'latin1');
-          return res.json({ content, mimeType });
+          const content = readTruncated('latin1');
+          return res.json({ content, mimeType, size: fileSize, truncated });
         } catch {
-          return res.json({ content: '[Binary file - cannot display as text]', mimeType });
+          return res.json({ content: '[Binary file - cannot display as text]', mimeType, size: fileSize });
         }
       }
     }
 
-    // For non-text types without forceText, try text first then fall back to sendFile
     try {
+      if (truncated) {
+        const content = readTruncated('utf-8');
+        return res.json({ content, mimeType, size: fileSize, truncated: true });
+      }
       const buf = fs.readFileSync(filePath);
-      // Check if first 1000 bytes have null bytes (binary indicator)
-      const hasNull = buf.slice(0, 1000).includes(0);
+      const hasNull = Array.from(buf.subarray(0, 1000)).includes(0);
       if (!hasNull) {
-        return res.json({ content: buf.toString('utf-8'), mimeType });
+        return res.json({ content: buf.toString('utf-8'), mimeType, size: fileSize });
       }
       return res.sendFile(filePath);
     } catch {
@@ -489,7 +505,9 @@ app.get('/api/fs/serve', (req, res) => {
   const filePath = safePath(req.query.path);
   if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
-    res.sendFile(filePath);
+    // Resolve symlinks to real path so sendFile works correctly
+    const realPath = fs.realpathSync(filePath);
+    res.sendFile(realPath);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -722,21 +740,65 @@ app.post('/api/system/dnd', (req, res) => {
 // ============= WEB PROXY (bypass X-Frame-Options for browser) =============
 
 app.get('/api/proxy', async (req, res) => {
-  const url = req.query.url;
+  let url = req.query.url;
   if (!url) return res.status(400).send('URL required');
+
+  // Unwrap DuckDuckGo redirect links
+  if (url.includes('duckduckgo.com/l/') || url.includes('/l/?uddg=')) {
+    try {
+      const u = new URL(url);
+      const uddg = u.searchParams.get('uddg');
+      if (uddg) url = decodeURIComponent(uddg);
+    } catch {}
+  }
+
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      redirect: 'follow',
     });
     const contentType = response.headers.get('content-type') || 'text/html';
+
+    // If it's not HTML (image, CSS, JS, etc.) just pipe it through
+    if (!contentType.includes('text/html')) {
+      const buf = await response.arrayBuffer();
+      res.setHeader('Content-Type', contentType);
+      res.send(Buffer.from(buf));
+      return;
+    }
+
     let body = await response.text();
-
-    // Rewrite relative URLs to absolute
-    const baseUrl = new URL(url);
+    const finalUrl = response.url || url;
+    const baseUrl = new URL(finalUrl);
     const base = `${baseUrl.protocol}//${baseUrl.host}`;
-    body = body.replace(/(href|src|action)="\/(?!\/)/g, `$1="${base}/`);
 
-    res.setHeader('Content-Type', contentType);
+    // Inject a base tag so relative URLs resolve correctly
+    if (!body.includes('<base ')) {
+      body = body.replace(/<head([^>]*)>/i, `<head$1><base href="${base}/">`);
+    }
+
+    // Rewrite all links and form actions to go back through the proxy
+    body = body.replace(/(href|src|action)=(["'])(https?:\/\/[^"']+)\2/gi, (m, attr, q, url) => {
+      if (attr === 'href' || attr === 'action') {
+        return `${attr}=${q}/api/proxy?url=${encodeURIComponent(url)}${q}`;
+      }
+      return m;
+    });
+    body = body.replace(/(href|action)=(["'])\/(?!\/)([^"']*)\2/gi, (m, attr, q, path) => {
+      return `${attr}=${q}/api/proxy?url=${encodeURIComponent(base + '/' + path)}${q}`;
+    });
+
+    // Strip CSP and X-Frame-Options meta tags
+    body = body.replace(/<meta[^>]*http-equiv=["']?(Content-Security-Policy|X-Frame-Options)["']?[^>]*>/gi, '');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // Remove frame-busting headers
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('Content-Security-Policy');
     res.send(body);
   } catch (err) {
     res.status(502).send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#94a3b8"><div style="text-align:center"><h2>Cannot load this page</h2><p>${err.message}</p><p style="opacity:0.5">${url}</p></div></body></html>`);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { WindowState } from '../../store/useStore';
+import { WindowState, useStore } from '../../store/useStore';
+import { AppIcon } from '../../utils/icons';
 
 interface SystemStats {
   cpu: { usage: number; perCore: number[]; count: number; model: string };
@@ -14,9 +15,11 @@ interface SystemStats {
 
 const ActivityMonitorApp: React.FC<{ window: WindowState }> = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
-  const [tab, setTab] = useState<'cpu' | 'memory' | 'disk' | 'processes'>('cpu');
+  const [tab, setTab] = useState<'webos' | 'cpu' | 'memory' | 'disk' | 'processes'>('webos');
   const [cpuHistory, setCpuHistory] = useState<number[]>(Array(40).fill(0));
   const [memHistory, setMemHistory] = useState<number[]>(Array(40).fill(0));
+  const windows = useStore(s => s.windows);
+  const closeWindow = useStore(s => s.closeWindow);
 
   const fetchStats = async () => {
     try {
@@ -78,14 +81,64 @@ const ActivityMonitorApp: React.FC<{ window: WindowState }> = () => {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a', color: '#e2e8f0' }}>
       {/* Tabs */}
       <div style={st.tabs}>
-        {(['cpu', 'memory', 'disk', 'processes'] as const).map(t => (
+        {(['webos', 'cpu', 'memory', 'disk', 'processes'] as const).map(t => (
           <button key={t} style={{ ...st.tab, ...(tab === t ? st.activeTab : {}) }} onClick={() => setTab(t)}>
-            {t === 'cpu' ? 'CPU' : t === 'memory' ? 'Memory' : t === 'disk' ? 'Disk' : 'Processes'}
+            {t === 'webos' ? 'webOS Apps' : t === 'cpu' ? 'CPU' : t === 'memory' ? 'Memory' : t === 'disk' ? 'Disk' : 'Processes'}
           </button>
         ))}
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {tab === 'webos' && (
+          <div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 10 }}>
+              {windows.length} {windows.length === 1 ? 'app window' : 'app windows'} running
+            </div>
+            {windows.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+                No apps are currently running. Open apps from the dock.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={st.th}>App</th>
+                    <th style={st.th}>Window</th>
+                    <th style={{ ...st.th, textAlign: 'right' }}>State</th>
+                    <th style={{ ...st.th, textAlign: 'right' }}>Memory</th>
+                    <th style={{ ...st.th, textAlign: 'right' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {windows.map(w => {
+                    // Estimate memory by window size (rough proxy - each px is ~0.5 bytes)
+                    const estMem = Math.round((w.width * w.height * 0.5) / 1024);
+                    return (
+                      <tr key={w.id} style={{ borderBottom: '1px solid #1e293b' }}>
+                        <td style={{ ...st.td, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <AppIcon appId={w.appId} size={24} />
+                          <span style={{ fontWeight: 500 }}>{w.appId}</span>
+                        </td>
+                        <td style={{ ...st.td, color: '#94a3b8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.title}</td>
+                        <td style={{ ...st.td, textAlign: 'right' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, background: w.isMinimized ? '#f59e0b20' : w.isMaximized ? '#3b82f620' : '#22c55e20', color: w.isMinimized ? '#f59e0b' : w.isMaximized ? '#3b82f6' : '#22c55e' }}>
+                            {w.isMinimized ? 'Minimized' : w.isMaximized ? 'Maximized' : 'Active'}
+                          </span>
+                        </td>
+                        <td style={{ ...st.td, textAlign: 'right', color: '#a5b4fc' }}>{estMem} KB</td>
+                        <td style={{ ...st.td, textAlign: 'right' }}>
+                          <button style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, background: '#ef444420', color: '#ef4444', border: '1px solid #ef444440', cursor: 'pointer' }}
+                            onClick={() => closeWindow(w.id)}>Quit</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
         {tab === 'cpu' && (
           <div>
             {renderChart(cpuHistory, '#3b82f6', 'CPU Usage', `${stats.cpu.usage}%`)}

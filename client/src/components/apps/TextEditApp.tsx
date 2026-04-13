@@ -12,6 +12,8 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [showOpenPicker, setShowOpenPicker] = useState(false);
   const [showSavePicker, setShowSavePicker] = useState(false);
   const [loadingFile, setLoadingFile] = useState(false);
+  const [fileSize, setFileSize] = useState(0);
+  const [truncated, setTruncated] = useState(false);
   const { updateWindow, addNotification } = useStore();
 
   useEffect(() => {
@@ -27,12 +29,33 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     setLoadingFile(true);
     setIsOpen(true);
     try {
+      // First check file size via info endpoint
+      const infoRes = await fetch(`http://localhost:3001/api/fs/info?path=${encodeURIComponent(path)}`);
+      const info = await infoRes.json();
+      const size = info.size || 0;
+      setFileSize(size);
+
+      // Hard cap at 50 MB - refuse to open
+      if (size > 50 * 1024 * 1024) {
+        setContent(`[File too large to open in TextEdit]\n\nFile size: ${(size / 1024 / 1024).toFixed(1)} MB\nMaximum supported: 50 MB\n\nTry opening this file in a specialized app, or split it into smaller chunks.`);
+        setFilePath(path);
+        setModified(false);
+        setTruncated(true);
+        updateWindow(win.id, { title: path.split('/').pop() || 'TextEdit', filePath: path });
+        setLoadingFile(false);
+        return;
+      }
+
       const res = await fetch(`http://localhost:3001/api/fs/read?path=${encodeURIComponent(path)}&text=true`);
       const data = await res.json();
       setContent(data.content || '');
+      setTruncated(!!data.truncated);
       setFilePath(path);
       setModified(false);
       updateWindow(win.id, { title: path.split('/').pop() || 'TextEdit', filePath: path });
+      if (data.truncated) {
+        addNotification({ title: 'TextEdit', message: `Large file (${(size / 1024 / 1024).toFixed(1)} MB) — showing first 5 MB in read-only mode`, icon: 'textedit' });
+      }
     } catch {
       addNotification({ title: 'TextEdit', message: 'Could not open file', icon: 'textedit' });
     }
@@ -115,13 +138,21 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : (
-        <textarea id="textedit-area" style={st.editor} value={content}
-          onChange={e => { setContent(e.target.value); setModified(true); }}
-          placeholder="Start typing..." spellCheck />
+        <>
+          {truncated && (
+            <div style={{ padding: '8px 14px', background: '#422006', borderBottom: '1px solid #78350f', fontSize: 12, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M7 1v8M7 12v1"/><circle cx="7" cy="7" r="6"/></svg>
+              Cannot load full file — {(fileSize / 1024 / 1024).toFixed(1)} MB is too large. Read-only mode showing first 5 MB.
+            </div>
+          )}
+          <textarea id="textedit-area" style={st.editor} value={content}
+            onChange={e => { if (!truncated) { setContent(e.target.value); setModified(true); } }}
+            placeholder="Start typing..." spellCheck readOnly={truncated} />
+        </>
       )}
       <div style={st.statusBar}>
-        <span>{content.length} chars | {content.split(/\n/).length} lines | {content.split(/\s+/).filter(Boolean).length} words</span>
-        <span>{filePath ? filePath.split('/').pop() : 'Untitled'}{modified ? ' (modified)' : ''}</span>
+        <span>{content.length.toLocaleString()} chars | {content.split(/\n/).length.toLocaleString()} lines | {fileSize > 0 ? `${(fileSize / 1024).toFixed(1)} KB` : '0 KB'}</span>
+        <span>{filePath ? filePath.split('/').pop() : 'Untitled'}{modified ? ' (modified)' : ''}{truncated ? ' (read-only)' : ''}</span>
       </div>
       {showOpenPicker && <FilePicker mode="open" title="Open File" onSelect={path => { setShowOpenPicker(false); openFile(path); }} onCancel={() => setShowOpenPicker(false)} />}
       {showSavePicker && <FilePicker mode="save" title="Save As" defaultFileName={filePath?.split('/').pop() || 'Untitled.txt'} onSelect={handleSaveAs} onCancel={() => setShowSavePicker(false)} />}
