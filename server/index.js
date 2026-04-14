@@ -425,14 +425,21 @@ app.get('/api/fs/read', (req, res) => {
   }
 });
 
-// Write file
+// Write file (supports utf-8 text or base64-encoded binary via { encoding: 'base64' })
 app.post('/api/fs/write', (req, res) => {
   const filePath = safePath(req.body.path);
   if (!filePath) return res.status(403).json({ error: 'Access denied' });
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, req.body.content || '', 'utf-8');
-    res.json({ success: true });
+    const content = req.body.content || '';
+    if (req.body.encoding === 'base64') {
+      // Strip data URL prefix if present (e.g. "data:image/png;base64,...")
+      const cleaned = content.replace(/^data:[^;]+;base64,/, '');
+      fs.writeFileSync(filePath, Buffer.from(cleaned, 'base64'));
+    } else {
+      fs.writeFileSync(filePath, content, 'utf-8');
+    }
+    res.json({ success: true, path: filePath });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -758,12 +765,36 @@ app.get('/api/proxy', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity',
       },
       redirect: 'follow',
     });
     const contentType = response.headers.get('content-type') || 'text/html';
 
-    // If it's not HTML (image, CSS, JS, etc.) just pipe it through
+    // CSS: rewrite url(...) references through the proxy
+    if (contentType.includes('text/css')) {
+      let css = await response.text();
+      const finalCssUrl = response.url || url;
+      const cssProxy = (rawUrl) => {
+        try {
+          const abs = new URL(rawUrl, finalCssUrl).href;
+          if (!/^https?:/i.test(abs)) return rawUrl;
+          return `http://localhost:${PORT}/api/proxy?url=${encodeURIComponent(abs)}`;
+        } catch { return rawUrl; }
+      };
+      css = css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (m, q, val) => {
+        if (/^(data:|#)/i.test(val)) return m;
+        return `url(${q}${cssProxy(val)}${q})`;
+      });
+      css = css.replace(/@import\s+(['"])([^'"]+)\1/gi, (m, q, val) => {
+        return `@import ${q}${cssProxy(val)}${q}`;
+      });
+      res.setHeader('Content-Type', 'text/css');
+      res.send(css);
+      return;
+    }
+
+    // If it's not HTML (image, JS, font, etc.) just pipe it through
     if (!contentType.includes('text/html')) {
       const buf = await response.arrayBuffer();
       res.setHeader('Content-Type', contentType);
@@ -775,25 +806,111 @@ app.get('/api/proxy', async (req, res) => {
     const finalUrl = response.url || url;
     const baseUrl = new URL(finalUrl);
     const base = `${baseUrl.protocol}//${baseUrl.host}`;
+    const PROXY_ORIGIN = `http://localhost:${PORT}`;
+    const PROXY_PREFIX = `${PROXY_ORIGIN}/api/proxy?url=`;
 
-    // Inject a base tag so relative URLs resolve correctly
-    if (!body.includes('<base ')) {
-      body = body.replace(/<head([^>]*)>/i, `<head$1><base href="${base}/">`);
-    }
+    // Remove any existing <base> tags — they break our fully-qualified rewrites
+    body = body.replace(/<base[^>]*>/gi, '');
 
-    // Rewrite all links and form actions to go back through the proxy
-    body = body.replace(/(href|src|action)=(["'])(https?:\/\/[^"']+)\2/gi, (m, attr, q, url) => {
-      if (attr === 'href' || attr === 'action') {
-        return `${attr}=${q}/api/proxy?url=${encodeURIComponent(url)}${q}`;
-      }
-      return m;
+    // Helper: convert any URL (absolute, protocol-relative, root-relative, relative)
+    // into a fully-qualified proxy URL.
+    const toProxy = (rawUrl) => {
+      try {
+        const abs = new URL(rawUrl, finalUrl).href;
+        if (!/^https?:/i.test(abs)) return rawUrl; // data:, mailto:, javascript:
+        return PROXY_PREFIX + encodeURIComponent(abs);
+      } catch { return rawUrl; }
+    };
+
+    // Rewrite href/src/action attributes in HTML
+    body = body.replace(/(href|src|action)=(["'])([^"'#][^"']*)\2/gi, (m, attr, q, val) => {
+      if (/^(javascript:|mailto:|data:|blob:|#)/i.test(val)) return m;
+      return `${attr}=${q}${toProxy(val)}${q}`;
     });
-    body = body.replace(/(href|action)=(["'])\/(?!\/)([^"']*)\2/gi, (m, attr, q, path) => {
-      return `${attr}=${q}/api/proxy?url=${encodeURIComponent(base + '/' + path)}${q}`;
+    // Rewrite srcset (images with multiple resolutions)
+    body = body.replace(/srcset=(["'])([^"']+)\1/gi, (m, q, val) => {
+      const rewritten = val.split(',').map(part => {
+        const trimmed = part.trim();
+        const spaceIdx = trimmed.search(/\s/);
+        const u = spaceIdx >= 0 ? trimmed.slice(0, spaceIdx) : trimmed;
+        const rest = spaceIdx >= 0 ? trimmed.slice(spaceIdx) : '';
+        return toProxy(u) + rest;
+      }).join(', ');
+      return `srcset=${q}${rewritten}${q}`;
+    });
+    // Rewrite CSS url(...) references in inline <style> blocks and style="" attributes
+    body = body.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (m, q, val) => {
+      if (/^(data:|blob:|#)/i.test(val)) return m;
+      return `url(${q}${toProxy(val)}${q})`;
     });
 
     // Strip CSP and X-Frame-Options meta tags
     body = body.replace(/<meta[^>]*http-equiv=["']?(Content-Security-Policy|X-Frame-Options)["']?[^>]*>/gi, '');
+    // Neutralize frame-busting scripts (top != self redirects)
+    body = body.replace(/if\s*\(\s*(window\.)?top\s*(!==|!=)\s*(window\.)?self\s*\)/gi, 'if (false)');
+    body = body.replace(/(window\.)?top\.location/gi, 'window.location');
+
+    // Inject runtime click/navigation interceptor so JS-driven nav also stays in the proxy
+    const interceptor = `
+<script>
+(function(){
+  var PROXY = 'http://localhost:${PORT}/api/proxy?url=';
+  var BASE = ${JSON.stringify(base)};
+  var CURRENT = ${JSON.stringify(finalUrl)};
+  // Tell parent window which page we're currently on (so it can update URL bar)
+  try { window.parent.postMessage({ type: 'webos-browser-nav', url: CURRENT }, '*'); } catch(e){}
+  function absolutize(url){
+    try { return new URL(url, BASE).href; } catch(e) { return url; }
+  }
+  function wrap(url){
+    if (!url) return url;
+    if (url.indexOf(PROXY) === 0 || url.indexOf('/api/proxy') === 0) return url;
+    if (url.indexOf('javascript:') === 0 || url.indexOf('mailto:') === 0 || url.indexOf('#') === 0 || url.indexOf('data:') === 0) return url;
+    var abs = absolutize(url);
+    if (!/^https?:/i.test(abs)) return url;
+    return PROXY + encodeURIComponent(abs);
+  }
+  // Intercept all clicks on anchors (including dynamically inserted ones)
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!a || !a.href) return;
+    var href = a.getAttribute('href');
+    if (!href) return;
+    var wrapped = wrap(href);
+    if (wrapped !== href) {
+      e.preventDefault();
+      window.location.href = wrapped;
+    }
+  }, true);
+  // Intercept form submissions
+  document.addEventListener('submit', function(e){
+    var f = e.target;
+    if (!f || !f.action) return;
+    var method = (f.method || 'get').toLowerCase();
+    if (method !== 'get') return; // POST: let through, server side will handle (rare)
+    e.preventDefault();
+    var params = new URLSearchParams(new FormData(f)).toString();
+    var act = absolutize(f.action);
+    var sep = act.indexOf('?') >= 0 ? '&' : '?';
+    window.location.href = PROXY + encodeURIComponent(act + sep + params);
+  }, true);
+  // Hijack window.open
+  var _open = window.open;
+  window.open = function(url){ if (url) window.location.href = wrap(url); return null; };
+  // Hijack location assignments via setter
+  try {
+    var origAssign = window.location.assign.bind(window.location);
+    window.location.assign = function(url){ origAssign(wrap(url)); };
+    var origReplace = window.location.replace.bind(window.location);
+    window.location.replace = function(url){ origReplace(wrap(url)); };
+  } catch(e){}
+})();
+</script>`;
+    if (body.includes('</body>')) {
+      body = body.replace('</body>', interceptor + '</body>');
+    } else {
+      body += interceptor;
+    }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     // Remove frame-busting headers
@@ -801,6 +918,25 @@ app.get('/api/proxy', async (req, res) => {
     res.removeHeader('Content-Security-Policy');
     res.send(body);
   } catch (err) {
+    // If the failed request was for an asset (js/css/image/font), return an
+    // empty body with the matching MIME type so the browser doesn't log
+    // "MIME type 'text/html' is not executable" errors.
+    const lower = (url || '').toLowerCase().split('?')[0];
+    const mimeByExt = {
+      '.js': 'application/javascript', '.mjs': 'application/javascript',
+      '.css': 'text/css',
+      '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf',
+      '.json': 'application/json',
+    };
+    const ext = Object.keys(mimeByExt).find(e => lower.endsWith(e));
+    if (ext) {
+      res.setHeader('Content-Type', mimeByExt[ext]);
+      res.status(502).send('');
+      return;
+    }
     res.status(502).send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#94a3b8"><div style="text-align:center"><h2>Cannot load this page</h2><p>${err.message}</p><p style="opacity:0.5">${url}</p></div></body></html>`);
   }
 });
