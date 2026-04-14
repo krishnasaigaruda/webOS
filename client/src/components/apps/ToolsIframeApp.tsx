@@ -21,12 +21,18 @@ const ToolsIframeApp: React.FC<Props> = ({ src, hideHeader = true }) => {
         if (!doc) return;
         const style = doc.createElement('style');
         style.textContent = `
-          .header, .toolbar-header, nav.header, header {
+          .header, .toolbar-header, nav.header, header, .hdr, .top-bar, .topbar, .app-header {
             display: none !important;
           }
           body {
             padding-top: 0 !important;
             margin-top: 0 !important;
+          }
+          .app, main, .main, .content {
+            top: 0 !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+            height: 100vh !important;
           }
         `;
         doc.head.appendChild(style);

@@ -7,6 +7,7 @@ import ContextMenu from '../system/ContextMenu';
 import ControlCenter from '../system/ControlCenter';
 import SpotlightSearch from '../system/SpotlightSearch';
 import NotificationCenter from '../system/NotificationCenter';
+import NotificationToasts from '../system/NotificationToasts';
 import WidgetPanel from '../system/WidgetPanel';
 import DesktopWidgets from './DesktopWidgets';
 import SetupWizard from '../system/SetupWizard';
@@ -72,6 +73,18 @@ const Desktop: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSpotlight]);
+
+  // Listen for fs-change postMessages from Tools-Hub iframes (voice recorder, etc.)
+  // and rebroadcast as window events that Finder/Photos listen to.
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'webos-fs-changed') {
+        window.dispatchEvent(new CustomEvent('webos-fs-changed'));
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   // Welcome notification (only once per session)
   useEffect(() => {
@@ -157,6 +170,7 @@ const Desktop: React.FC = () => {
       {showControlCenter && <ControlCenter />}
       {showSpotlight && <SpotlightSearch />}
       {showNotificationCenter && <NotificationCenter />}
+      <NotificationToasts />
       {showWidgets && <WidgetPanel />}
       {needsSetup && <SetupWizard onComplete={handleSetupComplete} />}
     </div>

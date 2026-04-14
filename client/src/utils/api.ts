@@ -1,5 +1,13 @@
 const API_BASE = 'http://localhost:3001/api';
 
+// Fire a window event after any filesystem mutation so live views (Finder,
+// Photos, etc.) can refresh without needing to be closed & reopened.
+const fireFsChanged = () => {
+  try { window.dispatchEvent(new CustomEvent('webos-fs-changed')); } catch {}
+};
+
+const withFsEvent = <T,>(p: Promise<T>): Promise<T> => p.then(r => { fireFsChanged(); return r; });
+
 export const api = {
   // File System
   fs: {
@@ -8,31 +16,37 @@ export const api = {
     read: (path: string) =>
       fetch(`${API_BASE}/fs/read?path=${encodeURIComponent(path)}`).then(r => r.json()),
     write: (path: string, content: string) =>
-      fetch(`${API_BASE}/fs/write`, {
+      withFsEvent(fetch(`${API_BASE}/fs/write`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, content })
-      }).then(r => r.json()),
+      }).then(r => r.json())),
+    writeBinary: (path: string, dataUrl: string) =>
+      withFsEvent(fetch(`${API_BASE}/fs/write`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content: dataUrl, encoding: 'base64' })
+      }).then(r => r.json())),
     mkdir: (path: string) =>
-      fetch(`${API_BASE}/fs/mkdir`, {
+      withFsEvent(fetch(`${API_BASE}/fs/mkdir`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path })
-      }).then(r => r.json()),
+      }).then(r => r.json())),
     delete: (path: string) =>
-      fetch(`${API_BASE}/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' }).then(r => r.json()),
+      withFsEvent(fetch(`${API_BASE}/fs/delete?path=${encodeURIComponent(path)}`, { method: 'DELETE' }).then(r => r.json())),
     rename: (oldPath: string, newPath: string) =>
-      fetch(`${API_BASE}/fs/rename`, {
+      withFsEvent(fetch(`${API_BASE}/fs/rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldPath, newPath })
-      }).then(r => r.json()),
+      }).then(r => r.json())),
     copy: (source: string, destination: string) =>
-      fetch(`${API_BASE}/fs/copy`, {
+      withFsEvent(fetch(`${API_BASE}/fs/copy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source, destination })
-      }).then(r => r.json()),
+      }).then(r => r.json())),
     search: (query: string, path?: string) =>
       fetch(`${API_BASE}/fs/search?query=${encodeURIComponent(query)}${path ? `&path=${encodeURIComponent(path)}` : ''}`).then(r => r.json()),
     info: (path: string) =>

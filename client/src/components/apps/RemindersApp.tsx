@@ -11,41 +11,46 @@ interface Reminder {
   fired: boolean;
 }
 
+const loadReminders = (): Reminder[] => {
+  try {
+    const raw = localStorage.getItem('webos-reminders');
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+};
+
+const saveReminders = (reminders: Reminder[]) => {
+  try {
+    localStorage.setItem('webos-reminders', JSON.stringify(reminders));
+  } catch {}
+};
+
 const RemindersApp: React.FC<{ window: WindowState }> = () => {
   const { addNotification } = useStore();
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [reminders, setRemindersState] = useState<Reminder[]>(() => loadReminders());
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newTime, setNewTime] = useState('09:00');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newRepeat, setNewRepeat] = useState<'none' | 'daily' | 'weekly'>('none');
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const firedIdsRef = useRef<Set<string>>(new Set());
 
-  // Check reminders every 15 seconds
+  const setReminders = (updater: Reminder[] | ((prev: Reminder[]) => Reminder[])) => {
+    setRemindersState(prev => {
+      const next = typeof updater === 'function' ? (updater as any)(prev) : updater;
+      saveReminders(next);
+      return next;
+    });
+  };
+
+  // Sync with global reminders updates (fired by background checker)
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      const currentDate = now.toISOString().split('T')[0];
+    const handler = () => setRemindersState(loadReminders());
+    window.addEventListener('webos-reminders-updated', handler);
+    return () => window.removeEventListener('webos-reminders-updated', handler);
+  }, []);
 
-      setReminders(prev => {
-        let changed = false;
-        const updated = prev.map(r => {
-          if (r.enabled && !r.fired && r.time === currentTime && r.date === currentDate && !firedIdsRef.current.has(r.id)) {
-            firedIdsRef.current.add(r.id);
-            addNotification({ title: 'Reminder', message: r.title, app: 'reminders' });
-            playSound();
-            changed = true;
-            return { ...r, fired: true };
-          }
-          return r;
-        });
-        return changed ? updated : prev;
-      });
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [addNotification]); // eslint-disable-line
 
   const playSound = () => {
     try {

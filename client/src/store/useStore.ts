@@ -90,6 +90,14 @@ interface OSStore {
   setBrightness: (v: number) => void;
   setVolume: (v: number) => void;
 
+  // Privacy & Security
+  cameraAccess: boolean;
+  microphoneAccess: boolean;
+  locationServices: boolean;
+  toggleCameraAccess: () => void;
+  toggleMicrophoneAccess: () => void;
+  toggleLocationServices: () => void;
+
   // Spotlight
   showSpotlight: boolean;
   toggleSpotlight: () => void;
@@ -245,6 +253,14 @@ export const useStore = create<OSStore>((set, get) => ({
   setBrightness: (v) => set({ brightness: v }),
   setVolume: (v) => set({ volume: v }),
 
+  // Privacy & Security
+  cameraAccess: true,
+  microphoneAccess: true,
+  locationServices: false,
+  toggleCameraAccess: () => set(s => ({ cameraAccess: !s.cameraAccess })),
+  toggleMicrophoneAccess: () => set(s => ({ microphoneAccess: !s.microphoneAccess })),
+  toggleLocationServices: () => set(s => ({ locationServices: !s.locationServices })),
+
   // Spotlight
   showSpotlight: false,
   toggleSpotlight: () => set(s => ({ showSpotlight: !s.showSpotlight, showControlCenter: false, showNotificationCenter: false })),
@@ -282,6 +298,7 @@ const PERSIST_KEYS = [
   'isLoggedIn', 'currentUser', 'theme', 'accentColor', 'wallpaper',
   'dockApps', 'wifi', 'bluetooth', 'doNotDisturb', 'airplaneMode',
   'brightness', 'volume', 'notifications', 'desktopCount', 'currentDesktop',
+  'cameraAccess', 'microphoneAccess', 'locationServices',
 ] as const;
 
 // Debounced save
@@ -317,6 +334,60 @@ export async function saveInstalledApps(apps: AppDefinition[]) {
     id: a.id, name: a.name, icon: a.icon, category: a.category,
     defaultWidth: a.defaultWidth, defaultHeight: a.defaultHeight, description: a.description,
   })));
+}
+
+// ============= Global Reminders Checker =============
+// Runs regardless of whether Reminders app is open
+const firedReminderIds = new Set<string>();
+
+function checkReminders() {
+  try {
+    const raw = localStorage.getItem('webos-reminders');
+    if (!raw) return;
+    const reminders = JSON.parse(raw);
+    if (!Array.isArray(reminders)) return;
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const currentDate = now.toISOString().split('T')[0];
+    let changed = false;
+    const updated = reminders.map((r: any) => {
+      if (r.enabled && !r.fired && r.time === currentTime && r.date === currentDate && !firedReminderIds.has(r.id)) {
+        firedReminderIds.add(r.id);
+        const notif = { title: 'Reminder', message: r.title, app: 'reminders' };
+        useStore.getState().addNotification(notif);
+        // Also dispatch a direct DOM event so the toast component is guaranteed to hear about it
+        try {
+          window.dispatchEvent(new CustomEvent('webos-toast', { detail: notif }));
+        } catch {}
+        try {
+          const ctx = new AudioContext();
+          const playChime = (startOffset: number) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880; osc.type = 'sine'; gain.gain.value = 0.3;
+            osc.start(ctx.currentTime + startOffset);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startOffset + 0.8);
+            osc.stop(ctx.currentTime + startOffset + 0.8);
+          };
+          playChime(0);
+          playChime(1.0); // Second chime ~1s after the first
+        } catch {}
+        changed = true;
+        return { ...r, fired: true };
+      }
+      return r;
+    });
+    if (changed) {
+      localStorage.setItem('webos-reminders', JSON.stringify(updated));
+      window.dispatchEvent(new Event('webos-reminders-updated'));
+    }
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  // Check every second so reminders fire within 1s of their target time
+  setInterval(checkReminders, 1000);
 }
 
 // Restore state from IndexedDB on app load

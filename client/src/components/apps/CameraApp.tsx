@@ -5,6 +5,8 @@ import { api } from '../../utils/api';
 const CameraApp: React.FC<{ window: WindowState }> = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const liveRecordCanvasRef = useRef<HTMLCanvasElement>(null);
+  const recordRafRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -15,22 +17,54 @@ const CameraApp: React.FC<{ window: WindowState }> = () => {
   const [mode, setMode] = useState<'photo' | 'video'>('photo');
   const [photos, setPhotos] = useState<string[]>([]);
   const { addNotification } = useStore();
+  const cameraAccess = useStore(s => s.cameraAccess);
+  const microphoneAccess = useStore(s => s.microphoneAccess);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    startCamera();
+    if (cameraAccess) {
+      startCamera();
+    } else {
+      // Camera access was revoked — stop any existing stream and show error
+      stream?.getTracks().forEach(t => t.stop());
+      setStream(null);
+      setError('Camera access is disabled. Turn it on in Settings → Privacy & Security.');
+    }
     return () => { stream?.getTracks().forEach(t => t.stop()); };
-  }, []); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraAccess, microphoneAccess]);
+
+  // Reattach stream whenever the video element remounts (e.g. after Retake)
+  useEffect(() => {
+    if (!photo && videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [photo, stream]);
 
   const startCamera = async () => {
+    if (!cameraAccess) {
+      setError('Camera access is disabled. Turn it on in Settings → Privacy & Security.');
+      return;
+    }
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 1280, height: 720 }, audio: mode === 'video' });
+      // Request audio only if microphone access is allowed
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 1280, height: 720 },
+        audio: microphoneAccess,
+      });
       setStream(s);
       if (videoRef.current) videoRef.current.srcObject = s;
       setError('');
     } catch {
-      setError('Camera access denied. Please allow camera access in your browser settings.');
+      setError('Camera access denied. Please allow camera and microphone access in your browser settings.');
     }
+  };
+
+  const getWebosRoot = async (): Promise<string> => {
+    const r = await fetch('http://localhost:3001/api/fs/root').then(r => r.json());
+    if (!r.root) throw new Error('webOS folder not configured');
+    return r.root;
   };
 
   const takePhoto = () => {
@@ -41,28 +75,84 @@ const CameraApp: React.FC<{ window: WindowState }> = () => {
     canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // Mirror the captured image so it matches the live preview (selfie-natural)
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     const dataUrl = canvas.toDataURL('image/png');
     setPhoto(dataUrl);
     setPhotos(prev => [dataUrl, ...prev]);
-    addNotification({ title: 'Camera', message: 'Photo captured!', icon: 'camera', app: 'camera' });
+  };
+
+  const savePhotoToCameraRoll = async () => {
+    if (!photo) return;
+    try {
+      const root = await getWebosRoot();
+      const targetPath = `${root}/Camera Roll/Photo_${Date.now()}.png`;
+      await api.fs.writeBinary(targetPath, photo);
+      addNotification({ title: 'Camera', message: 'Saved to Camera Roll', icon: 'camera', app: 'camera' });
+      setPhoto(null);
+    } catch (e: any) {
+      addNotification({ title: 'Camera', message: `Save failed: ${e.message}`, icon: 'camera', app: 'camera' });
+    }
   };
 
   const startRecording = () => {
-    if (!stream) return;
+    if (!stream || !videoRef.current || !liveRecordCanvasRef.current) return;
     chunksRef.current = [];
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Recording_${Date.now()}.webm`;
-      a.click();
-      addNotification({ title: 'Camera', message: 'Video saved!', icon: 'camera', app: 'camera' });
+    const video = videoRef.current;
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+
+    // Draw the live video mirrored onto the visible canvas every frame
+    const canvas = liveRecordCanvasRef.current;
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const drawFrame = () => {
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      recordRafRef.current = requestAnimationFrame(drawFrame);
     };
-    recorder.start();
+    drawFrame();
+
+    // Build a combined stream: mirrored video from canvas + audio from mic
+    const canvasStream = canvas.captureStream(30);
+    const combined = new MediaStream();
+    canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    stream.getAudioTracks().forEach(t => combined.addTrack(t));
+
+    const recorder = new MediaRecorder(combined, { mimeType: 'video/webm' });
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    recorder.onstop = async () => {
+      if (recordRafRef.current !== null) cancelAnimationFrame(recordRafRef.current);
+      recordRafRef.current = null;
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+      setRecording(false);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+
+      // Auto-save to Camera Roll
+      try {
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const root = await getWebosRoot();
+        const targetPath = `${root}/Camera Roll/Recording_${Date.now()}.webm`;
+        await api.fs.writeBinary(targetPath, dataUrl);
+        addNotification({ title: 'Camera', message: 'Saved to Camera Roll', icon: 'camera', app: 'camera' });
+      } catch (e: any) {
+        addNotification({ title: 'Camera', message: `Save failed: ${e.message}`, icon: 'camera', app: 'camera' });
+      }
+    };
+    // Pass a timeslice so chunks flush every 100ms instead of only on stop
+    recorder.start(100);
     mediaRecorderRef.current = recorder;
     setRecording(true);
     setRecordingTime(0);
@@ -70,31 +160,8 @@ const CameraApp: React.FC<{ window: WindowState }> = () => {
   };
 
   const stopRecording = () => {
+    try { mediaRecorderRef.current?.requestData(); } catch {}
     mediaRecorderRef.current?.stop();
-    setRecording(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
-
-  const savePhoto = () => {
-    if (!photo) return;
-    const link = document.createElement('a');
-    link.download = `Photo_${Date.now()}.png`;
-    link.href = photo;
-    link.click();
-    addNotification({ title: 'Camera', message: 'Photo downloaded!', icon: 'camera', app: 'camera' });
-  };
-
-  const saveToDesktop = async () => {
-    if (!photo) return;
-    const base64 = photo.split(',')[1];
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const path = `/Users/krishna/Desktop/Photo_${Date.now()}.png`;
-    try {
-      await api.fs.write(path, photo);
-      addNotification({ title: 'Camera', message: `Saved to Desktop`, icon: 'camera', app: 'camera' });
-    } catch {}
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -127,14 +194,25 @@ const CameraApp: React.FC<{ window: WindowState }> = () => {
           </div>
           <div style={st.controls}>
             <button style={st.actionBtn} onClick={() => setPhoto(null)}>Retake</button>
-            <button style={st.actionBtn} onClick={savePhoto}>Download</button>
-            <button style={{ ...st.actionBtn, background: '#2563eb' }} onClick={saveToDesktop}>Save to Desktop</button>
+            <button style={{ ...st.actionBtn, background: '#2563eb' }} onClick={savePhotoToCameraRoll}>Save to Camera Roll</button>
           </div>
         </>
       ) : (
         <>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-            <video ref={videoRef} autoPlay playsInline muted style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8, transform: 'scaleX(-1)' }} />
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{
+                maxWidth: '100%', maxHeight: '100%', borderRadius: 8,
+                // Live camera preview is mirrored. During recording we hide it and
+                // display the recording canvas (which is already mirrored) instead.
+                transform: 'scaleX(-1)',
+                display: recording ? 'none' : 'block',
+              }} />
+            <canvas ref={liveRecordCanvasRef}
+              style={{
+                maxWidth: '100%', maxHeight: '100%', borderRadius: 8,
+                display: recording ? 'block' : 'none',
+              }} />
             {recording && (
               <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.6)', padding: '6px 12px', borderRadius: 20 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: '#FF3B30', animation: 'pulse 1s infinite' }} />

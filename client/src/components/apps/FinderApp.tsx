@@ -80,7 +80,60 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const [renameValue, setRenameValue] = useState('');
   const [showNewDialog, setShowNewDialog] = useState<'file' | 'folder' | null>(null);
   const [newItemName, setNewItemName] = useState('');
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const { openWindow, showContextMenu, updateWindow, addNotification } = useStore();
+
+  const toggleMultiSelect = () => {
+    setMultiSelect(m => {
+      if (m) setSelectedFiles(new Set());
+      return !m;
+    });
+  };
+
+  const toggleFileSelected = (path: string) => {
+    setSelectedFiles(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  };
+
+  const clearFileSelection = () => setSelectedFiles(new Set());
+
+  const selectAllVisible = () => {
+    setSelectedFiles(new Set(filteredFiles.map(f => f.path)));
+  };
+
+  const bulkMoveToTrash = async () => {
+    if (selectedFiles.size === 0) return;
+    try {
+      const rootRes = await fetch('http://localhost:3001/api/fs/root');
+      const rootData = await rootRes.json();
+      if (!rootData.root) return;
+      for (const filePath of Array.from(selectedFiles)) {
+        const fileName = filePath.split('/').pop() || '';
+        const trashDest = `${rootData.root}/.webos-trash/${fileName}`;
+        try { await api.fs.rename(filePath, trashDest); } catch {}
+      }
+    } catch {}
+    const count = selectedFiles.size;
+    setSelectedFiles(new Set());
+    loadFiles(currentPath);
+    addNotification({ title: 'Finder', message: `${count} item${count === 1 ? '' : 's'} moved to Trash`, icon: 'finder' });
+  };
+
+  const bulkDuplicate = async () => {
+    for (const filePath of Array.from(selectedFiles)) {
+      try { await api.fs.copy(filePath, filePath + ' copy'); } catch {}
+    }
+    setSelectedFiles(new Set());
+    loadFiles(currentPath);
+  };
+
+  const bulkCopyPaths = () => {
+    navigator.clipboard.writeText(Array.from(selectedFiles).join('\n'));
+  };
 
   const loadFiles = useCallback(async (dirPath: string) => {
     setLoading(true);
@@ -108,12 +161,20 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     updateWindow(win.id, { title: currentPath.split('/').pop() || '/' });
   }, [currentPath]); // eslint-disable-line
 
+  // Live-refresh when any other app mutates the filesystem
+  useEffect(() => {
+    const handler = () => loadFiles(currentPath);
+    window.addEventListener('webos-fs-changed', handler);
+    return () => window.removeEventListener('webos-fs-changed', handler);
+  }, [currentPath, loadFiles]);
+
   const navigate = (path: string) => {
     setCurrentPath(path);
     const newHistory = [...history.slice(0, historyIndex + 1), path];
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
     setSelectedFile(null);
+    setSelectedFiles(new Set());
   };
 
   const goBack = () => { if (historyIndex > 0) { setHistoryIndex(historyIndex - 1); setCurrentPath(history[historyIndex - 1]); } };
@@ -182,6 +243,27 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const handleFileContextMenu = (e: React.MouseEvent, file: FileItem) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Bulk-action menu when multiple files are selected in multi-select mode
+    if (multiSelect && selectedFiles.size > 1) {
+      // If the right-clicked file isn't in the selection, add it
+      if (!selectedFiles.has(file.path)) {
+        setSelectedFiles(prev => new Set(prev).add(file.path));
+      }
+      const count = selectedFiles.has(file.path) ? selectedFiles.size : selectedFiles.size + 1;
+      showContextMenu(e.clientX, e.clientY, [
+        { label: `${count} items selected`, disabled: true },
+        { separator: true, label: '' },
+        { label: 'Duplicate', action: bulkDuplicate },
+        { label: 'Copy Paths', action: bulkCopyPaths },
+        { separator: true, label: '' },
+        { label: 'Move to Trash', action: bulkMoveToTrash },
+        { separator: true, label: '' },
+        { label: 'Clear Selection', action: clearFileSelection },
+      ]);
+      return;
+    }
+
     setSelectedFile(file.path);
     const ext = getExt(file.name);
 
@@ -360,6 +442,15 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
               </button>
             </div>
+            <button
+              style={{ ...styles.toolBtn, background: multiSelect ? 'var(--accent)' : 'transparent', color: multiSelect ? '#fff' : 'var(--text-secondary)' }}
+              onClick={toggleMultiSelect}
+              title={multiSelect ? 'Exit multi-select' : 'Select multiple'}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="10" height="10" rx="2"/>
+                <path d="M4.5 7.5l2 2 3-4"/>
+              </svg>
+            </button>
             <button style={styles.toolBtn} onClick={handleCreateFolder} title="New Folder">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="1" y="3" width="12" height="9" rx="1.5"/><path d="M1 5h12M1 3l2-1.5h3L8 3"/><line x1="7" y1="6.5" x2="7" y2="10.5"/><line x1="5" y1="8.5" x2="9" y2="8.5"/></svg>
             </button>
@@ -386,51 +477,77 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
+                  {multiSelect && (
+                    <th style={{ ...styles.th, width: 32 }}>
+                      <input type="checkbox"
+                        checked={filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length}
+                        onChange={(e) => e.target.checked ? selectAllVisible() : clearFileSelection()} />
+                    </th>
+                  )}
                   <th style={styles.th}>Name</th>
                   <th style={{ ...styles.th, width: 90 }}>Size</th>
                   <th style={{ ...styles.th, width: 120 }}>Modified</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredFiles.map((file, i) => (
-                  <tr key={i}
-                    style={{ background: selectedFile === file.path ? 'var(--accent)' : i % 2 === 0 ? 'transparent' : 'var(--hover)', color: selectedFile === file.path ? '#fff' : 'var(--text-primary)', cursor: 'default' }}
-                    onClick={() => setSelectedFile(file.path)}
-                    onDoubleClick={() => handleDoubleClick(file)}
-                    onContextMenu={(e) => handleFileContextMenu(e, file)}>
-                    <td style={{ padding: '5px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {renderFileIcon(file)}
-                      {renaming === file.path ? (
-                        <input value={renameValue} onChange={e => setRenameValue(e.target.value)}
-                          onBlur={() => handleRename(file.path, renameValue)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleRename(file.path, renameValue); if (e.key === 'Escape') setRenaming(null); }}
-                          autoFocus onClick={e => e.stopPropagation()}
-                          style={{ border: '1px solid var(--accent)', borderRadius: 4, padding: '1px 4px', fontSize: 13, background: 'var(--window-content)', color: 'var(--text-primary)', outline: 'none' }} />
-                      ) : file.name}
-                    </td>
-                    <td style={{ padding: '5px 16px', fontSize: 12, color: selectedFile === file.path ? '#fff' : 'var(--text-secondary)', textAlign: 'right' }}>
-                      {file.isDirectory ? '--' : formatSize(file.size)}
-                    </td>
-                    <td style={{ padding: '5px 16px', fontSize: 12, color: selectedFile === file.path ? '#fff' : 'var(--text-secondary)', textAlign: 'right' }}>
-                      {file.modified ? new Date(file.modified).toLocaleDateString() : '--'}
-                    </td>
-                  </tr>
-                ))}
+                {filteredFiles.map((file, i) => {
+                  const isChecked = selectedFiles.has(file.path);
+                  const highlighted = multiSelect ? isChecked : selectedFile === file.path;
+                  return (
+                    <tr key={i}
+                      style={{ background: highlighted ? 'var(--accent)' : i % 2 === 0 ? 'transparent' : 'var(--hover)', color: highlighted ? '#fff' : 'var(--text-primary)', cursor: 'default' }}
+                      onClick={() => { if (multiSelect) toggleFileSelected(file.path); else setSelectedFile(file.path); }}
+                      onDoubleClick={() => { if (!multiSelect) handleDoubleClick(file); }}
+                      onContextMenu={(e) => handleFileContextMenu(e, file)}>
+                      {multiSelect && (
+                        <td style={{ padding: '5px 16px', width: 32 }}>
+                          <input type="checkbox" checked={isChecked} onChange={() => toggleFileSelected(file.path)} onClick={e => e.stopPropagation()} />
+                        </td>
+                      )}
+                      <td style={{ padding: '5px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {renderFileIcon(file)}
+                        {renaming === file.path ? (
+                          <input value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                            onBlur={() => handleRename(file.path, renameValue)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRename(file.path, renameValue); if (e.key === 'Escape') setRenaming(null); }}
+                            autoFocus onClick={e => e.stopPropagation()}
+                            style={{ border: '1px solid var(--accent)', borderRadius: 4, padding: '1px 4px', fontSize: 13, background: 'var(--window-content)', color: 'var(--text-primary)', outline: 'none' }} />
+                        ) : file.name}
+                      </td>
+                      <td style={{ padding: '5px 16px', fontSize: 12, color: highlighted ? '#fff' : 'var(--text-secondary)', textAlign: 'right' }}>
+                        {file.isDirectory ? '--' : formatSize(file.size)}
+                      </td>
+                      <td style={{ padding: '5px 16px', fontSize: 12, color: highlighted ? '#fff' : 'var(--text-secondary)', textAlign: 'right' }}>
+                        {file.modified ? new Date(file.modified).toLocaleDateString() : '--'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 4, padding: 16 }}>
-              {filteredFiles.map((file, i) => (
-                <div key={i}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 12, borderRadius: 8, cursor: 'default',
-                    background: selectedFile === file.path ? 'var(--accent)' : 'transparent', color: selectedFile === file.path ? '#fff' : 'var(--text-primary)' }}
-                  onClick={() => setSelectedFile(file.path)}
-                  onDoubleClick={() => handleDoubleClick(file)}
-                  onContextMenu={(e) => handleFileContextMenu(e, file)}>
-                  {renderFileIcon(file, 40)}
-                  <span style={{ fontSize: 11, textAlign: 'center', wordBreak: 'break-all', lineHeight: 1.3 }}>{file.name}</span>
-                </div>
-              ))}
+              {filteredFiles.map((file, i) => {
+                const isChecked = selectedFiles.has(file.path);
+                const highlighted = multiSelect ? isChecked : selectedFile === file.path;
+                return (
+                  <div key={i}
+                    style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 12, borderRadius: 8, cursor: 'default',
+                      background: highlighted ? 'var(--accent)' : 'transparent', color: highlighted ? '#fff' : 'var(--text-primary)' }}
+                    onClick={() => { if (multiSelect) toggleFileSelected(file.path); else setSelectedFile(file.path); }}
+                    onDoubleClick={() => { if (!multiSelect) handleDoubleClick(file); }}
+                    onContextMenu={(e) => handleFileContextMenu(e, file)}>
+                    {multiSelect && (
+                      <input type="checkbox" checked={isChecked}
+                        onChange={() => toggleFileSelected(file.path)}
+                        onClick={e => e.stopPropagation()}
+                        style={{ position: 'absolute', top: 6, left: 6 }} />
+                    )}
+                    {renderFileIcon(file, 40)}
+                    <span style={{ fontSize: 11, textAlign: 'center', wordBreak: 'break-all', lineHeight: 1.3 }}>{file.name}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

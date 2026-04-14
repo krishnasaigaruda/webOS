@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { WindowState, useStore } from '../../store/useStore';
+import { api } from '../../utils/api';
 
 const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const {
@@ -7,6 +8,17 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     currentUser, wifi, doNotDisturb,
     toggleWifi, toggleDoNotDisturb, volume, setVolume,
   } = useStore();
+
+  const handleWifiToggle = () => {
+    const next = !wifi;
+    toggleWifi();
+    api.system.wifi(next).catch(() => {});
+  };
+
+  const handleVolumeChange = (v: number) => {
+    setVolume(v);
+    api.system.volume(v).catch(() => {});
+  };
   // If opened with filePath like 'about', go to that section
   const [activeSection, setActiveSection] = useState(win.filePath || 'general');
 
@@ -17,7 +29,6 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     network: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>,
     sound: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>,
     notifications: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
-    privacy: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
     about: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
   };
 
@@ -28,7 +39,6 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     { id: 'network', label: 'Network' },
     { id: 'sound', label: 'Sound' },
     { id: 'notifications', label: 'Notifications' },
-    { id: 'privacy', label: 'Privacy & Security' },
     { id: 'about', label: 'About' },
   ];
 
@@ -150,7 +160,7 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           <div>
             <h2 style={styles.title}>Network</h2>
             <SettingRow label="Wi-Fi" desc={wifi ? 'Connected' : 'Off'}>
-              <Toggle active={wifi} onToggle={toggleWifi} />
+              <Toggle active={wifi} onToggle={handleWifiToggle} />
             </SettingRow>
           </div>
         )}
@@ -159,7 +169,7 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           <div>
             <h2 style={styles.title}>Sound</h2>
             <SettingRow label="Volume" desc={`${volume}%`}>
-              <input type="range" min="0" max="100" value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ width: 200 }} />
+              <input type="range" min="0" max="100" value={volume} onChange={e => handleVolumeChange(Number(e.target.value))} style={{ width: 200 }} />
             </SettingRow>
           </div>
         )}
@@ -198,20 +208,6 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           </div>
         )}
 
-        {activeSection === 'privacy' && (
-          <div>
-            <h2 style={styles.title}>Privacy & Security</h2>
-            <SettingRow label="File System Access" desc="Allow apps to access your files">
-              <Toggle active={true} onToggle={() => {}} />
-            </SettingRow>
-            <SettingRow label="Camera Access" desc="Allow apps to use your camera">
-              <Toggle active={true} onToggle={() => {}} />
-            </SettingRow>
-            <SettingRow label="Location Services" desc="Allow apps to use your location">
-              <Toggle active={false} onToggle={() => {}} />
-            </SettingRow>
-          </div>
-        )}
       </div>
     </div>
   );

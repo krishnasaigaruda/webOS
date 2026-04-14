@@ -30,7 +30,14 @@ const Dock: React.FC = () => {
     showContextMenu(e.clientX, e.clientY - menuHeight, [
       { label: app?.name || appId, disabled: true },
       { separator: true, label: '' },
-      { label: 'New Window', action: () => handleAppClick(appId) },
+      { label: 'New Window', action: () => {
+        const a = getApp(appId);
+        if (!a) return;
+        openWindow(appId, a.name, a.icon, {
+          width: a.defaultWidth, height: a.defaultHeight,
+          minWidth: a.minWidth, minHeight: a.minHeight,
+        });
+      } },
       ...(appWindows.length > 0 ? [
         { separator: true, label: '' },
         ...appWindows.map(w => ({ label: w.title, action: () => focusWindow(w.id) })),
@@ -123,6 +130,7 @@ const Dock: React.FC = () => {
                   if (window.confirm('Are you sure you want to permanently erase the items in the webOS Trash? This only removes webOS items, not your Mac files.')) {
                     try {
                       await fetch('http://localhost:3001/api/fs/trash-empty', { method: 'POST' });
+                      window.dispatchEvent(new CustomEvent('webos-fs-changed'));
                       useStore.getState().addNotification({ title: 'Trash', message: 'webOS Trash emptied', app: 'finder' });
                     } catch {}
                   }
