@@ -744,6 +744,59 @@ app.post('/api/system/dnd', (req, res) => {
   });
 });
 
+// ============= SESSION FILES (.webos profile files) =============
+
+// Native macOS Save dialog for picking a .webos file location
+app.post('/api/session/pick-save', (req, res) => {
+  const { defaultName = 'session1.webos' } = req.body || {};
+  const script = `POSIX path of (choose file name with prompt "Save webOS session as" default name "${defaultName}")`;
+  exec(`osascript -e '${script}'`, (err, stdout) => {
+    if (err) return res.json({ cancelled: true });
+    let p = stdout.trim();
+    if (!p) return res.json({ cancelled: true });
+    // Ensure .webos extension
+    if (!p.toLowerCase().endsWith('.webos')) p = p + '.webos';
+    res.json({ path: p });
+  });
+});
+
+// Native macOS Open dialog for picking an existing .webos file
+// Restricts the file picker to only show .webos files as selectable.
+app.post('/api/session/pick-load', (req, res) => {
+  const script = `POSIX path of (choose file with prompt "Open webOS session file" of type {"webos"})`;
+  exec(`osascript -e '${script}'`, (err, stdout) => {
+    if (err) return res.json({ cancelled: true });
+    const p = stdout.trim();
+    if (!p) return res.json({ cancelled: true });
+    res.json({ path: p });
+  });
+});
+
+// Write session data (any absolute path — session files live OUTSIDE the sandbox)
+app.post('/api/session/save', (req, res) => {
+  const { path: filePath, data } = req.body || {};
+  if (!filePath || typeof filePath !== 'string') return res.status(400).json({ error: 'path required' });
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, typeof data === 'string' ? data : JSON.stringify(data, null, 2), 'utf-8');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Read a session file
+app.get('/api/session/load', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath || typeof filePath !== 'string') return res.status(400).json({ error: 'path required' });
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.json({ success: true, data: JSON.parse(content) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============= WEB PROXY (bypass X-Frame-Options for browser) =============
 
 app.get('/api/proxy', async (req, res) => {
