@@ -3,7 +3,6 @@ import { WindowState } from '../../store/useStore';
 import FinderApp from './FinderApp';
 import TextEditApp from './TextEditApp';
 import CodeEditorApp from './CodeEditorApp';
-import TerminalApp from './TerminalApp';
 import CalculatorApp from './CalculatorApp';
 import CalendarApp from './CalendarApp';
 import RemindersApp from './RemindersApp';
@@ -37,7 +36,6 @@ const APP_COMPONENTS: Record<string, React.FC<{ window: WindowState }>> = {
   'finder': FinderApp,
   'textedit': TextEditApp,
   'code-editor': CodeEditorApp,
-  'terminal': TerminalApp,
   'calculator': CalculatorApp,
   'calendar': CalendarApp,
   'reminders': RemindersApp,

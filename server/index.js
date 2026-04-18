@@ -663,18 +663,6 @@ app.get('/api/system/stats', (req, res) => {
   });
 });
 
-// Execute command (for terminal)
-app.post('/api/system/exec', (req, res) => {
-  const { command, cwd } = req.body;
-  exec(command, { cwd: cwd || HOME, timeout: 30000, maxBuffer: 1024 * 1024 * 10 }, (err, stdout, stderr) => {
-    res.json({
-      stdout: stdout || '',
-      stderr: stderr || '',
-      error: err ? err.message : null,
-      exitCode: err ? err.code : 0
-    });
-  });
-});
 
 // ============= TRASH API (uses AppleScript for macOS permissions) =============
 
@@ -738,11 +726,12 @@ app.post('/api/system/bluetooth', (req, res) => {
   });
 });
 
-// Volume control
+// Volume control — validate input is a number to prevent command injection
 app.post('/api/system/volume', (req, res) => {
-  const { level } = req.body;
+  const level = parseInt(req.body.level, 10);
+  if (isNaN(level) || level < 0 || level > 100) return res.status(400).json({ error: 'level must be 0-100' });
   exec(`osascript -e "set volume output volume ${level}"`, (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ error: 'Volume change failed' });
     res.json({ success: true, level });
   });
 });

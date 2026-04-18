@@ -13,7 +13,6 @@ export interface AppDefinition {
 export const APP_REGISTRY: Record<string, AppDefinition> = {
   'finder': { id: 'finder', name: 'Finder', icon: 'finder', category: 'system', defaultWidth: 900, defaultHeight: 600, description: 'Browse and manage your files' },
   'textedit': { id: 'textedit', name: 'TextEdit', icon: 'textedit', category: 'productivity', defaultWidth: 700, defaultHeight: 500, description: 'Simple text editor' },
-  'terminal': { id: 'terminal', name: 'Terminal', icon: 'terminal', category: 'development', defaultWidth: 700, defaultHeight: 450, description: 'Command line interface' },
   'code-editor': { id: 'code-editor', name: 'Code Editor', icon: 'code-editor', category: 'development', defaultWidth: 1000, defaultHeight: 700, description: 'Professional code editor' },
   'calculator': { id: 'calculator', name: 'Calculator', icon: 'calculator', category: 'utilities', defaultWidth: 320, defaultHeight: 500, minWidth: 320, minHeight: 500, description: 'Perform calculations' },
   'calendar': { id: 'calendar', name: 'Calendar', icon: 'calendar', category: 'productivity', defaultWidth: 800, defaultHeight: 600, description: 'Calendar and events' },
