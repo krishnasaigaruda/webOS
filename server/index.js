@@ -11,9 +11,21 @@ const mime = require('mime-types');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+// CORS — only allow requests from the webOS client (localhost:3000 or LAN IP:3000)
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (same-origin, curl, mobile apps)
+    if (!origin) return callback(null, true);
+    // Allow localhost and any LAN IP on port 3000
+    if (/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('CORS blocked'));
+  },
+};
+const io = new Server(server, { cors: corsOptions });
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -72,7 +84,11 @@ const storage = multer.diskStorage({
     if (dest) fs.mkdirSync(dest, { recursive: true });
     cb(null, dest);
   },
-  filename: (req, file, cb) => cb(null, file.originalname)
+  filename: (req, file, cb) => {
+    // Sanitize filename to prevent path traversal (e.g. ../../etc/crontab)
+    const safe = path.basename(file.originalname).replace(/[^a-zA-Z0-9._\-() ]/g, '_');
+    cb(null, safe || `upload-${Date.now()}`);
+  }
 });
 const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
 
@@ -97,7 +113,7 @@ app.post('/api/fs/set-root', (req, res) => {
     saveConfig({ webosRoot: rootPath });
     res.json({ success: true, root: rootPath });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -118,7 +134,7 @@ app.post('/api/fs/create-default-root', (req, res) => {
     saveConfig({ webosRoot: rootPath });
     res.json({ success: true, root: rootPath });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -145,7 +161,7 @@ app.get('/api/fs/trash-list', (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -166,16 +182,16 @@ app.post('/api/fs/trash-empty', (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
 // Native macOS folder picker using AppleScript
 app.post('/api/fs/pick-folder', (req, res) => {
-  const { prompt: promptText = 'Choose a folder', allowNew = true } = req.body || {};
-  const script = allowNew
-    ? `POSIX path of (choose folder with prompt "${promptText}")`
-    : `POSIX path of (choose folder with prompt "${promptText}")`;
+  // Sanitize prompt text to prevent AppleScript injection
+  const rawPrompt = (req.body || {}).prompt || 'Choose a folder';
+  const promptText = rawPrompt.replace(/["\\'`;$(){}|&<>]/g, '').slice(0, 200);
+  const script = `POSIX path of (choose folder with prompt "${promptText}")`;
   exec(`osascript -e '${script}'`, (err, stdout) => {
     if (err) return res.json({ cancelled: true });
     const selectedPath = stdout.trim();
@@ -278,7 +294,7 @@ app.get('/api/fs/browse', (req, res) => {
       });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -304,7 +320,7 @@ app.post('/api/fs/import', (req, res) => {
     fs.symlinkSync(source, dest);
     res.json({ success: true, path: dest });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -324,7 +340,7 @@ app.post('/api/fs/unimport', (req, res) => {
       res.status(400).json({ error: 'Not an imported item' });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -384,7 +400,7 @@ app.get('/api/fs/list', (req, res) => {
       });
       return;
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -442,7 +458,7 @@ app.get('/api/fs/read', (req, res) => {
       return res.sendFile(filePath);
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -462,7 +478,7 @@ app.post('/api/fs/write', (req, res) => {
     }
     res.json({ success: true, path: filePath });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -474,7 +490,7 @@ app.post('/api/fs/mkdir', (req, res) => {
     fs.mkdirSync(dirPath, { recursive: true });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -493,7 +509,7 @@ app.delete('/api/fs/delete', (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -506,7 +522,7 @@ app.post('/api/fs/rename', (req, res) => {
     fs.renameSync(oldPath, newPath);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -519,7 +535,7 @@ app.post('/api/fs/copy', (req, res) => {
     fs.cpSync(source, destination, { recursive: true });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -537,7 +553,7 @@ app.get('/api/fs/serve', (req, res) => {
     const realPath = fs.realpathSync(filePath);
     res.sendFile(realPath);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -557,23 +573,36 @@ app.get('/api/fs/info', (req, res) => {
       mimeType: stats.isDirectory() ? 'directory' : mime.lookup(filePath) || 'application/octet-stream'
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
 // Search files (jailed to sandbox)
 app.get('/api/fs/search', (req, res) => {
   const { query, path: searchPath } = req.query;
+  if (!query || typeof query !== 'string') return res.json([]);
   const dir = safePath(searchPath) || getWebosRoot();
   if (!dir) return res.json([]);
   const results = [];
+  const visited = new Set(); // prevent symlink loops
+  const startTime = Date.now();
 
   function searchDir(dirPath, depth = 0) {
-    if (depth > 10 || results.length > 200) return;
+    // Depth limit, result limit, and 3-second timeout
+    if (depth > 8 || results.length >= 100 || Date.now() - startTime > 3000) return;
     try {
+      // Resolve real path to detect symlink loops
+      const realPath = fs.realpathSync(dirPath);
+      if (visited.has(realPath)) return;
+      visited.add(realPath);
+      // Skip symlinks pointing outside the sandbox
+      const root = getWebosRoot();
+      if (root && !realPath.startsWith(root)) return;
+
       const items = fs.readdirSync(dirPath, { withFileTypes: true });
       for (const item of items) {
         if (item.name.startsWith('.')) continue;
+        if (results.length >= 100) return;
         const fullPath = path.join(dirPath, item.name);
         if (item.name.toLowerCase().includes(query.toLowerCase())) {
           results.push({
@@ -582,7 +611,7 @@ app.get('/api/fs/search', (req, res) => {
             isDirectory: item.isDirectory()
           });
         }
-        if (item.isDirectory()) {
+        if (item.isDirectory() && !item.isSymbolicLink()) {
           searchDir(fullPath, depth + 1);
         }
       }
@@ -598,16 +627,14 @@ app.get('/api/fs/search', (req, res) => {
 // Get system info
 app.get('/api/system/info', (req, res) => {
   const os = require('os');
+  // Only expose non-sensitive system info
   res.json({
-    hostname: os.hostname(),
     platform: os.platform(),
     arch: os.arch(),
     cpus: os.cpus().length,
     totalMemory: os.totalmem(),
     freeMemory: os.freemem(),
     uptime: os.uptime(),
-    user: os.userInfo().username,
-    homeDir: HOME
   });
 });
 
@@ -709,7 +736,7 @@ app.post('/api/system/wifi', (req, res) => {
   const { enabled } = req.body;
   const cmd = enabled ? 'networksetup -setairportpower en0 on' : 'networksetup -setairportpower en0 off';
   exec(cmd, (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ error: 'Operation failed' });
     res.json({ success: true, enabled });
   });
 });
@@ -758,7 +785,9 @@ app.post('/api/system/dnd', (req, res) => {
 
 // Native macOS Save dialog for picking a .webos file location
 app.post('/api/session/pick-save', (req, res) => {
-  const { defaultName = 'session1.webos' } = req.body || {};
+  // Sanitize defaultName to prevent AppleScript injection
+  const rawName = (req.body || {}).defaultName || 'session1.webos';
+  const defaultName = rawName.replace(/["\\'`;$(){}|&<>]/g, '').slice(0, 100);
   const script = `POSIX path of (choose file name with prompt "Save webOS session as" default name "${defaultName}")`;
   exec(`osascript -e '${script}'`, (err, stdout) => {
     if (err) return res.json({ cancelled: true });
@@ -782,28 +811,37 @@ app.post('/api/session/pick-load', (req, res) => {
   });
 });
 
-// Write session data (any absolute path — session files live OUTSIDE the sandbox)
+// Write session data — restricted to .webos files in safe locations
 app.post('/api/session/save', (req, res) => {
   const { path: filePath, data } = req.body || {};
   if (!filePath || typeof filePath !== 'string') return res.status(400).json({ error: 'path required' });
+  // Session files must end in .webos and cannot write to system directories
+  if (!filePath.endsWith('.webos')) return res.status(403).json({ error: 'Session files must end in .webos' });
+  const resolved = path.resolve(filePath);
+  const BLOCKED_DIRS = ['/etc', '/System', '/Library', '/usr', '/bin', '/sbin', '/var', '/tmp'];
+  if (BLOCKED_DIRS.some(d => resolved.startsWith(d))) return res.status(403).json({ error: 'Cannot save to system directories' });
   try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, typeof data === 'string' ? data : JSON.stringify(data, null, 2), 'utf-8');
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, typeof data === 'string' ? data : JSON.stringify(data, null, 2), 'utf-8');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Save failed' });
   }
 });
 
-// Read a session file
+// Read a session file — restricted to .webos files only
 app.get('/api/session/load', (req, res) => {
   const filePath = req.query.path;
   if (!filePath || typeof filePath !== 'string') return res.status(400).json({ error: 'path required' });
+  if (!filePath.endsWith('.webos')) return res.status(403).json({ error: 'Can only load .webos session files' });
+  const resolved = path.resolve(filePath);
+  const BLOCKED_DIRS = ['/etc', '/System', '/Library', '/usr', '/bin', '/sbin', '/var'];
+  if (BLOCKED_DIRS.some(d => resolved.startsWith(d))) return res.status(403).json({ error: 'Access denied' });
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(resolved, 'utf-8');
     res.json({ success: true, data: JSON.parse(content) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Could not read session file' });
   }
 });
 
@@ -812,6 +850,18 @@ app.get('/api/session/load', (req, res) => {
 app.get('/api/proxy', async (req, res) => {
   let url = req.query.url;
   if (!url) return res.status(400).send('URL required');
+
+  // SSRF protection — block internal/private IPs and non-HTTP protocols
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(403).send('Only HTTP(S) URLs allowed');
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' ||
+        host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') ||
+        host === '169.254.169.254' || host.endsWith('.local') || host === '[::1]') {
+      return res.status(403).send('Internal addresses are blocked');
+    }
+  } catch { return res.status(400).send('Invalid URL'); }
 
   // Unwrap DuckDuckGo redirect links
   if (url.includes('duckduckgo.com/l/') || url.includes('/l/?uddg=')) {
@@ -913,13 +963,16 @@ app.get('/api/proxy', async (req, res) => {
     body = body.replace(/if\s*\(\s*(window\.)?top\s*(!==|!=)\s*(window\.)?self\s*\)/gi, 'if (false)');
     body = body.replace(/(window\.)?top\.location/gi, 'window.location');
 
-    // Inject runtime click/navigation interceptor so JS-driven nav also stays in the proxy
+    // Inject runtime click/navigation interceptor so JS-driven nav also stays in the proxy.
+    // Escape </script> in interpolated values to prevent XSS via crafted URLs.
+    const safeBase = JSON.stringify(base).replace(/<\//g, '<\\/');
+    const safeFinalUrl = JSON.stringify(finalUrl).replace(/<\//g, '<\\/');
     const interceptor = `
 <script>
 (function(){
   var PROXY = 'http://localhost:${PORT}/api/proxy?url=';
-  var BASE = ${JSON.stringify(base)};
-  var CURRENT = ${JSON.stringify(finalUrl)};
+  var BASE = ${safeBase};
+  var CURRENT = ${safeFinalUrl};
   // Tell parent window which page we're currently on (so it can update URL bar)
   try { window.parent.postMessage({ type: 'webos-browser-nav', url: CURRENT }, '*'); } catch(e){}
   function absolutize(url){
@@ -1077,7 +1130,7 @@ app.get('/api/dictionary/:word', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -1091,7 +1144,7 @@ app.get('/api/weather', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Operation failed' });
   }
 });
 
@@ -1126,7 +1179,7 @@ io.on('connection', (socket) => {
 app.post('/api/system/screenshot', (req, res) => {
   const filePath = path.join(HOME, 'Desktop', `Screenshot_${Date.now()}.png`);
   exec(`screencapture -x "${filePath}"`, (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ error: 'Operation failed' });
     res.json({ success: true, path: filePath });
   });
 });
