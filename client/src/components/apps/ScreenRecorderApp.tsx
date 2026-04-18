@@ -52,7 +52,7 @@ const ScreenRecorderApp: React.FC<{ window: WindowState }> = () => {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a', color: '#e2e8f0', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
       {videoUrl ? (
         <>
-          <video src={videoUrl} controls style={{ maxWidth: '90%', maxHeight: '60%', borderRadius: 8 }} />
+          <video src={videoUrl} controls playsInline style={{ maxWidth: '90%', maxHeight: '60%', borderRadius: 8 }} />
           <div style={{ display: 'flex', gap: 12 }}>
             <button style={st.btn} onClick={() => setVideoUrl(null)}>New Recording</button>
             <button style={{ ...st.btn, background: '#2563eb' }} onClick={download}>Download</button>

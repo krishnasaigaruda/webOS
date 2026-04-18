@@ -53,6 +53,21 @@ export const api = {
       fetch(`${API_BASE}/fs/info?path=${encodeURIComponent(path)}`).then(r => r.json()),
     serveUrl: (path: string) =>
       `${API_BASE}/fs/serve?path=${encodeURIComponent(path)}`,
+    createDefaultRoot: (nickname: string) =>
+      withFsEvent(fetch(`${API_BASE}/fs/create-default-root`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname })
+      }).then(r => r.json())),
+    uploadToPath: async (file: File, targetDir: string) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('path', targetDir);
+      const res = await fetch(`${API_BASE}/fs/upload`, { method: 'POST', body: fd });
+      const json = await res.json();
+      try { window.dispatchEvent(new CustomEvent('webos-fs-changed')); } catch {}
+      return json;
+    },
   },
 
   // System
@@ -74,6 +89,26 @@ export const api = {
       fetch(`${API_BASE}/system/volume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }) }).then(r => r.json()),
     dnd: (enabled: boolean) =>
       fetch(`${API_BASE}/system/dnd`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }).then(r => r.json()),
+  },
+
+  // Session files (.webos profile files)
+  session: {
+    pickSave: (defaultName?: string) =>
+      fetch(`${API_BASE}/session/pick-save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultName })
+      }).then(r => r.json()),
+    pickLoad: () =>
+      fetch(`${API_BASE}/session/pick-load`, { method: 'POST' }).then(r => r.json()),
+    save: (path: string, data: any) =>
+      fetch(`${API_BASE}/session/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, data })
+      }).then(r => r.json()),
+    load: (path: string) =>
+      fetch(`${API_BASE}/session/load?path=${encodeURIComponent(path)}`).then(r => r.json()),
   },
 
   // Trash

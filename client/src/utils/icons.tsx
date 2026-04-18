@@ -410,6 +410,84 @@ export const AppStoreIconComponent: React.FC<IconProps> = ({ size = 48 }) => (
   </svg>
 );
 
+const TimerIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#tiGr)" />
+    <defs><linearGradient id="tiGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#f97316"/><stop offset="1" stopColor="#ef4444"/></linearGradient></defs>
+    <circle cx="32" cy="34" r="16" stroke="white" strokeWidth="2.5"/>
+    <path d="M32 24v10l6 4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M26 14h12" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M32 14v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+const ChessIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#chGr)" />
+    <defs><linearGradient id="chGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#1e293b"/><stop offset="1" stopColor="#334155"/></linearGradient></defs>
+    <rect x="14" y="14" width="36" height="36" rx="2" fill="none" stroke="white" strokeWidth="1.5"/>
+    <rect x="14" y="14" width="9" height="9" fill="rgba(255,255,255,0.3)"/>
+    <rect x="32" y="14" width="9" height="9" fill="rgba(255,255,255,0.3)"/>
+    <rect x="23" y="23" width="9" height="9" fill="rgba(255,255,255,0.3)"/>
+    <rect x="41" y="23" width="9" height="9" fill="rgba(255,255,255,0.3)"/>
+    <rect x="14" y="32" width="9" height="9" fill="rgba(255,255,255,0.3)"/>
+    <rect x="32" y="32" width="9" height="9" fill="rgba(255,255,255,0.3)"/>
+    <text x="32" y="38" fill="white" fontSize="18" textAnchor="middle" fontWeight="400">&#9822;</text>
+  </svg>
+);
+
+const Game2048IconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="#edc22e" />
+    <rect x="12" y="12" width="17" height="17" rx="3" fill="rgba(0,0,0,0.15)"/>
+    <rect x="35" y="12" width="17" height="17" rx="3" fill="rgba(0,0,0,0.15)"/>
+    <rect x="12" y="35" width="17" height="17" rx="3" fill="rgba(0,0,0,0.15)"/>
+    <rect x="35" y="35" width="17" height="17" rx="3" fill="rgba(0,0,0,0.1)"/>
+    <text x="21" y="25" fill="white" fontSize="11" fontWeight="800" textAnchor="middle">2</text>
+    <text x="43" y="25" fill="white" fontSize="11" fontWeight="800" textAnchor="middle">4</text>
+    <text x="21" y="48" fill="white" fontSize="9" fontWeight="800" textAnchor="middle">64</text>
+    <text x="43" y="48" fill="white" fontSize="7" fontWeight="800" textAnchor="middle">2048</text>
+  </svg>
+);
+
+const SnakeIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#snGr)" />
+    <defs><linearGradient id="snGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#059669"/><stop offset="1" stopColor="#10b981"/></linearGradient></defs>
+    <path d="M16 40h8v-16h8v16h8v-24h8v24" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    <circle cx="48" cy="16" r="4" fill="#ef4444"/>
+  </svg>
+);
+
+const TicTacToeIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#ttGr)" />
+    <defs><linearGradient id="ttGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#6366f1"/><stop offset="1" stopColor="#818cf8"/></linearGradient></defs>
+    <line x1="26" y1="14" x2="26" y2="50" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+    <line x1="38" y1="14" x2="38" y2="50" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+    <line x1="14" y1="26" x2="50" y2="26" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+    <line x1="14" y1="38" x2="50" y2="38" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+    <circle cx="20" cy="20" r="4" stroke="white" strokeWidth="2" fill="none"/>
+    <path d="M34 16l8 8M42 16l-8 8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+    <circle cx="32" cy="44" r="4" stroke="white" strokeWidth="2" fill="none"/>
+  </svg>
+);
+
+const MemoryIconComp: React.FC<IconProps> = ({ size = 48 }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+    <rect width="64" height="64" rx="14" fill="url(#meGr)" />
+    <defs><linearGradient id="meGr" x1="0" y1="0" x2="64" y2="64"><stop stopColor="#8b5cf6"/><stop offset="1" stopColor="#a78bfa"/></linearGradient></defs>
+    <rect x="12" y="12" width="17" height="17" rx="3" fill="rgba(255,255,255,0.2)" stroke="white" strokeWidth="1.5"/>
+    <rect x="35" y="12" width="17" height="17" rx="3" fill="rgba(255,255,255,0.2)" stroke="white" strokeWidth="1.5"/>
+    <rect x="12" y="35" width="17" height="17" rx="3" fill="rgba(255,255,255,0.2)" stroke="white" strokeWidth="1.5"/>
+    <rect x="35" y="35" width="17" height="17" rx="3" fill="rgba(255,255,255,0.2)" stroke="white" strokeWidth="1.5"/>
+    <text x="21" y="24" fill="white" fontSize="12" textAnchor="middle">&#9733;</text>
+    <text x="43" y="24" fill="white" fontSize="10" textAnchor="middle">?</text>
+    <text x="21" y="48" fill="white" fontSize="10" textAnchor="middle">?</text>
+    <text x="43" y="48" fill="white" fontSize="12" textAnchor="middle">&#9733;</text>
+  </svg>
+);
+
 // Icon registry - maps app IDs to icon components
 export const APP_ICONS: Record<string, React.FC<IconProps>> = {
   'finder': FinderIcon,
@@ -458,6 +536,12 @@ export const APP_ICONS: Record<string, React.FC<IconProps>> = {
   'graph-plotter': mkIcon('#7C3AED', 'M16 48L28 28L36 36L48 16', false),
   'voice-recorder': mkIcon('#EF4444', '', false),
   'tuner': mkIcon('#A855F7', 'M20 32h24M32 20v24', false),
+  'timer': TimerIconComp,
+  'chess': ChessIconComp,
+  '2048': Game2048IconComp,
+  'snake': SnakeIconComp,
+  'tic-tac-toe': TicTacToeIconComp,
+  'memory-game': MemoryIconComp,
 };
 
 export const AppIcon: React.FC<{ appId: string; size?: number }> = ({ appId, size = 48 }) => {

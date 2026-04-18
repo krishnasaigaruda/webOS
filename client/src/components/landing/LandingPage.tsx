@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore, applySessionSnapshot } from '../../store/useStore';
 import { WebOSLogo, AppIcon } from '../../utils/icons';
 import { getAllApps } from '../../utils/appRegistry';
+import { api } from '../../utils/api';
 
 const LandingPage: React.FC = () => {
-  const [view, setView] = useState<'landing' | 'login' | 'signup'>('landing');
+  const [view, setView] = useState<'landing' | 'signin' | 'docs' | 'choose'>('landing');
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [scrollY, setScrollY] = useState(0);
+  const [loadError, setLoadError] = useState<string>('');
   const login = useStore(s => s.login);
+  const setSessionFilePath = useStore(s => s.setSessionFilePath);
 
   useEffect(() => {
     const handleScroll = (e: Event) => setScrollY((e.target as HTMLElement).scrollTop);
@@ -17,11 +19,177 @@ const LandingPage: React.FC = () => {
     return () => el?.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => { e.preventDefault(); login(name || 'User', email || 'user@webos.local'); };
-  const handleSignup = (e: React.FormEvent) => { e.preventDefault(); login(name || 'User', email || 'user@webos.local'); };
+  // "New profile" — nickname → choose where to save the .webos session file → login
+  const handleCreateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nick = name.trim();
+    if (!nick) return;
+    // Ask where to save the new session file
+    const defaultName = `${nick.toLowerCase().replace(/\s+/g, '-')}.webos`;
+    const picked = await api.session.pickSave(defaultName);
+    if (picked.cancelled || !picked.path) return;
+    setSessionFilePath(picked.path);
+    login(nick, `${nick.toLowerCase().replace(/\s+/g, '')}@webos.local`);
+  };
 
-  // Auth screens
-  if (view === 'login' || view === 'signup') {
+  // "Load existing profile" — pick a .webos file, apply its contents
+  const handleLoadProfile = async () => {
+    setLoadError('');
+    const picked = await api.session.pickLoad();
+    if (picked.cancelled || !picked.path) return;
+    const res = await api.session.load(picked.path);
+    if (!res.success || !res.data) {
+      setLoadError(res.error || 'Could not read that session file.');
+      return;
+    }
+    applySessionSnapshot(res.data);
+    setSessionFilePath(picked.path);
+    // applySessionSnapshot sets isLoggedIn from the saved state if it was true
+  };
+
+  // Docs screen
+  if (view === 'docs') {
+    return (
+      <div style={s.docsPage}>
+        <nav style={{ ...s.nav, background: 'rgba(0,0,0,0.8)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={s.navLogo} onClick={() => setView('landing')}><WebOSLogo size={28} /><span style={s.logoText}>webOS</span></div>
+          <div style={s.navLinks}>
+            <button style={s.navBtn} onClick={() => setView('landing')}>Home</button>
+            <button style={s.navBtnPrimary} onClick={() => setView('choose')}>Get Started</button>
+          </div>
+        </nav>
+
+        <div style={s.docsWrap}>
+          <aside style={s.docsSidebar}>
+            <div style={s.docsSidebarTitle}>Docs</div>
+            <a href="#what-is-webos" style={s.docsSidebarLink}>What is webOS?</a>
+            <a href="#getting-started" style={s.docsSidebarLink}>Getting Started</a>
+            <a href="#the-desktop" style={s.docsSidebarLink}>The Desktop</a>
+            <a href="#files-and-finder" style={s.docsSidebarLink}>Files & Finder</a>
+            <a href="#built-in-apps" style={s.docsSidebarLink}>Built-in Apps</a>
+            <a href="#app-store" style={s.docsSidebarLink}>App Store</a>
+            <a href="#ai-assistant" style={s.docsSidebarLink}>AI Assistant</a>
+            <a href="#camera-and-media" style={s.docsSidebarLink}>Camera & Media</a>
+            <a href="#reminders" style={s.docsSidebarLink}>Reminders</a>
+            <a href="#settings" style={s.docsSidebarLink}>Settings</a>
+            <a href="#shortcuts" style={s.docsSidebarLink}>Keyboard Shortcuts</a>
+            <a href="#tips" style={s.docsSidebarLink}>Tips & Tricks</a>
+            <a href="#faq" style={s.docsSidebarLink}>FAQ</a>
+          </aside>
+
+          <main style={s.docsMain}>
+            <h1 style={s.docsH1}>webOS Documentation</h1>
+            <p style={s.docsLead}>A complete desktop operating system that runs in your browser —   AI, and 25+ apps.</p>
+
+            <h2 id="what-is-webos" style={s.docsH2}>What is webOS?</h2>
+            <p style={s.docsP}>webOS is a full desktop experience built entirely for the browser. It gives you a menu bar, dock, windowed apps, a real file system sandbox, and an AI assistant — all running on React + TypeScript on the client and Node.js on the server. Files you import or create live inside a folder you pick on your Mac, so nothing is stuck in browser storage.</p>
+
+            <h2 id="getting-started" style={s.docsH2}>Getting Started</h2>
+            <ol style={s.docsList}>
+              <li>Click <b>Get Started</b>, pick a nickname, and press <b>Enter webOS</b>.</li>
+              <li>On first launch, a setup wizard asks you to choose a folder on your Mac. This becomes your webOS sandbox — everything you save inside webOS lives there.</li>
+              <li>The wizard also lets you import files and folders. Imported items are real symlinks, so you can access them natively on your Mac at the same time.</li>
+              <li>You're in. The Dock at the bottom holds your apps, and the Menu Bar at the top holds system actions.</li>
+            </ol>
+
+            <h2 id="the-desktop" style={s.docsH2}>The Desktop</h2>
+            <p style={s.docsP}>The desktop shows your current wallpaper, a time/weather widget, and shortcut icons. Right-click anywhere for a context menu to change the wallpaper or open Finder. The <b>Menu Bar</b> at the top has the Apple-style menu, system actions, Control Center, Spotlight, and Notification Center.</p>
+
+            <h2 id="files-and-finder" style={s.docsH2}>Files & Finder</h2>
+            <p style={s.docsP}>Finder is your file manager. It shows your webOS sandbox as <b>My Files</b>, with sidebar shortcuts and a breadcrumb path bar.</p>
+            <ul style={s.docsList}>
+              <li><b>Navigate</b> with the back/forward arrows or by double-clicking folders.</li>
+              <li><b>Import</b> files or folders from your Mac with the blue Import button — imports are symlinks, so nothing is copied.</li>
+              <li><b>New File / New Folder</b> buttons create items in the current directory.</li>
+              <li><b>Multi-select</b>: click the checkbox-square button in the toolbar, then tick the files you want. Right-click any selected file for bulk actions (Move to Trash, Duplicate, Copy Paths).</li>
+              <li><b>Right-click</b> any file for Rename, Duplicate, Open With, Copy Path, Move to Trash.</li>
+              <li><b>Trash</b> is hidden inside the sandbox at <code>.webos-trash</code>. Delete items to move them there — emptying Trash removes them for real.</li>
+              <li><b>Live refresh</b>: when another app writes a file, Finder picks it up automatically.</li>
+            </ul>
+
+            <h2 id="built-in-apps" style={s.docsH2}>Built-in Apps</h2>
+            <p style={s.docsP}>webOS ships with a full suite:</p>
+            <ul style={s.docsList}>
+              <li><b>TextEdit</b> — simple text editor with file save.</li>
+              <li><b>Code Editor</b> — Monaco-powered, syntax highlighting for 20+ languages.</li>
+              <li><b>Terminal</b> — command line with access to your sandbox.</li>
+              <li><b>Spreadsheet</b>, <b>Document</b>, <b>Data Analyzer</b> — native XLSX, DOCX, and CSV viewers.</li>
+              <li><b>Universal Preview</b> — opens almost any file type.</li>
+              <li><b>Photos</b> — Library tab for imported images, webOS Camera tab for photos & videos you took with the Camera app.</li>
+              <li><b>Camera</b> — take mirrored selfies, record audio-enabled videos. Saves straight to a Camera Roll folder.</li>
+              <li><b>Music</b>, <b>Video Player</b>, <b>3D Model Viewer</b> — handle their respective media types.</li>
+              <li><b>Web Browser</b> — iframe-based Google search.</li>
+              <li><b>Calculator</b>, <b>Calendar</b>, <b>Clock</b>, <b>Weather</b>, <b>Maps</b>, <b>Dictionary</b>, <b>Notes</b>, <b>To Do</b>, <b>Reminders</b>.</li>
+              <li><b>Activity Monitor</b> — real CPU/memory/disk stats plus a webOS apps tab.</li>
+              <li><b>Settings</b> — appearance, wallpaper, sound, notifications, network, about.</li>
+            </ul>
+
+            <h2 id="app-store" style={s.docsH2}>App Store</h2>
+            <p style={s.docsP}>The App Store has 15+ installable apps from the Tools-Hub collection — Voice Recorder, Drawing Pad, Whiteboard, Translator, Dice Roller, Graph Plotter, Guitar Tuner, and more. Installed apps appear in Spotlight and the Finder apps sidebar.</p>
+
+            <h2 id="ai-assistant" style={s.docsH2}>AI Assistant</h2>
+            <p style={s.docsP}>Open <b>AI Assistant</b> from the Dock for a chat window powered by Pollinations AI. Ask coding questions, get explanations, brainstorm ideas, or just chat. The Data Analyzer app also uses AI to describe data you upload.</p>
+
+            <h2 id="camera-and-media" style={s.docsH2}>Camera & Media</h2>
+            <ul style={s.docsList}>
+              <li><b>Photo mode</b>: click the big shutter to capture. You get a preview with <b>Retake</b> and <b>Save to Camera Roll</b>.</li>
+              <li><b>Video mode</b>: click record, click stop when you're done. Videos auto-save to Camera Roll as <code>.webm</code> — with audio, mirrored to match the preview.</li>
+              <li><b>Camera Roll</b>: <code>My Files/Camera Roll/</code>. Photos and videos show up in the Photos app under the <b>webOS Camera</b> tab, and in Finder too.</li>
+              <li><b>Voice Recorder</b> (from App Store) → saves recordings to <code>Audio Recordings/</code>.</li>
+            </ul>
+
+            <h2 id="reminders" style={s.docsH2}>Reminders</h2>
+            <p style={s.docsP}>Open the Reminders app, tap the <b>+</b>, set a title + date + time + repeat option, and save. Reminders fire a toast notification and a double chime at their target time. They work even when the Reminders app is closed — there's a background checker running as long as webOS is open. Reminders persist across sessions.</p>
+
+            <h2 id="settings" style={s.docsH2}>Settings</h2>
+            <p style={s.docsP}>Settings has: <b>General</b> (theme, accent color), <b>Appearance</b>, <b>Wallpaper</b> (9 presets), <b>Network</b> (real Mac Wi-Fi toggle), <b>Sound</b> (real Mac volume slider), <b>Notifications</b>, <b>About</b>. The Wi-Fi and volume controls in Settings and Control Center both actually drive your Mac's system settings via AppleScript.</p>
+
+            <h2 id="shortcuts" style={s.docsH2}>Keyboard Shortcuts</h2>
+            <ul style={s.docsList}>
+              <li><b>⌘ Space</b> — open Spotlight search</li>
+              <li><b>⌘ N</b> — new window for the active app</li>
+              <li><b>⌘ ,</b> — open Settings</li>
+              <li><b>⌘ O</b> — open a file in Finder</li>
+            </ul>
+
+            <h2 id="tips" style={s.docsH2}>Tips & Tricks</h2>
+            <ul style={s.docsList}>
+              <li><b>Right-click the dock</b> on any app to open a new window, switch to an existing one, or quit all of its windows.</li>
+              <li><b>Drag windows</b> by their title bar, <b>resize</b> from any corner. Traffic-light buttons close/minimize/maximize.</li>
+              <li><b>Spotlight</b> (⌘ Space) searches apps, files, and AI prompts.</li>
+              <li><b>Notification Center</b> is accessible via the clock in the Menu Bar.</li>
+              <li><b>Activity Monitor</b> can force-quit any webOS window if it hangs.</li>
+              <li><b>Imports are symlinks</b>, so editing a file in webOS also edits it on your Mac — and vice versa.</li>
+            </ul>
+
+            <h2 id="faq" style={s.docsH2}>FAQ</h2>
+            <p style={s.docsQ}>Does webOS save my files somewhere I can access later?</p>
+            <p style={s.docsA}>Yes. You choose a real folder on your Mac during setup. Everything in webOS lives there and is visible in Finder.app on your Mac.</p>
+            <p style={s.docsQ}>Can I use webOS offline?</p>
+            <p style={s.docsA}>Some apps work offline (TextEdit, Calculator, Photos viewer). Apps that call remote services — AI Assistant, Weather, Web Browser — need an internet connection.</p>
+            <p style={s.docsQ}>Why do I have to give Chrome camera/microphone permissions?</p>
+            <p style={s.docsA}>The Camera and Voice Recorder apps use the browser's real media APIs. Chrome asks once, and the permission persists for <code>localhost:3000</code>. You can revoke it anytime from Chrome's lock icon in the address bar.</p>
+            <p style={s.docsQ}>Will my data be lost if I clear browser storage?</p>
+            <p style={s.docsA}>Your window layout, open apps, and notifications live in IndexedDB, so clearing it resets the UI — but your actual files are on your Mac's filesystem inside your sandbox folder, untouched.</p>
+            <p style={s.docsQ}>How do I get out?</p>
+            <p style={s.docsA}>Click the user icon in the Menu Bar → <b>Log Out</b>. You can log back in with the same nickname and everything is where you left it.</p>
+
+            <div style={{ marginTop: 60, padding: 32, borderRadius: 16, background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.08))', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'center' }}>
+              <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Ready to jump in?</h3>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>Takes less than 30 seconds to set up.</p>
+              <button style={s.ctaPrimary} onClick={() => setView('choose')}>
+                Launch webOS
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+              </button>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Profile choice screen — new or existing
+  if (view === 'choose') {
     return (
       <div style={s.authPage}>
         <div style={s.authBg}>
@@ -30,22 +198,36 @@ const LandingPage: React.FC = () => {
         </div>
         <div style={s.authCard} className="animate-scaleIn">
           <WebOSLogo size={52} />
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '16px 0 6px' }}>{view === 'login' ? 'Welcome Back' : 'Get Started'}</h1>
-          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 28 }}>{view === 'login' ? 'Sign in to continue to webOS' : 'Create your webOS account'}</p>
-          <form onSubmit={view === 'login' ? handleLogin : handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {view === 'signup' && <input style={s.authInput} type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />}
-            <input style={s.authInput} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-            <input style={s.authInput} type="password" placeholder="Password" />
-            {view === 'signup' && <input style={s.authInput} type="password" placeholder="Confirm Password" />}
-            <button type="submit" style={s.authBtn}>{view === 'login' ? 'Sign In' : 'Create Account'}</button>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '16px 0 6px' }}>Welcome to webOS</h1>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 28 }}>Start fresh or pick up where you left off</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button style={s.authBtn} onClick={() => setView('signin')}>Create New Profile</button>
+            <button style={{ ...s.authBtn, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }} onClick={handleLoadProfile}>Load Existing Profile (.webos)</button>
+          </div>
+          {loadError && <p style={{ marginTop: 16, fontSize: 13, color: '#f87171' }}>{loadError}</p>}
+          <button style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.3)', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setView('landing')}>Back to home</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sign-in screen — nickname, then pick save location for .webos session
+  if (view === 'signin') {
+    return (
+      <div style={s.authPage}>
+        <div style={s.authBg}>
+          <div style={{ ...s.authOrb, width: 500, height: 500, background: '#6366f1', top: '-20%', left: '-10%' }} />
+          <div style={{ ...s.authOrb, width: 400, height: 400, background: '#ec4899', bottom: '-15%', right: '-5%' }} />
+        </div>
+        <div style={s.authCard} className="animate-scaleIn">
+          <WebOSLogo size={52} />
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '16px 0 6px' }}>New Profile</h1>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 28 }}>Pick a nickname. You'll choose where to save your session file next.</p>
+          <form onSubmit={handleCreateProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <input style={s.authInput} type="text" placeholder="Your nickname" value={name} onChange={e => setName(e.target.value)} autoFocus maxLength={30} />
+            <button type="submit" style={s.authBtn} disabled={!name.trim()}>Continue</button>
           </form>
-          <p style={{ marginTop: 20, fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>
-            {view === 'login' ? "Don't have an account? " : 'Already have an account? '}
-            <span style={{ color: '#818cf8', cursor: 'pointer', fontWeight: 600 }} onClick={() => setView(view === 'login' ? 'signup' : 'login')}>
-              {view === 'login' ? 'Sign Up' : 'Sign In'}
-            </span>
-          </p>
-          <button style={{ marginTop: 12, fontSize: 13, color: 'rgba(255,255,255,0.3)', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setView('landing')}>Back to home</button>
+          <button style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.3)', cursor: 'pointer', border: 'none', background: 'none' }} onClick={() => setView('choose')}>Back</button>
         </div>
       </div>
     );
@@ -74,8 +256,8 @@ const LandingPage: React.FC = () => {
         <div style={s.navLinks}>
           <a href="#features" style={s.navLink}>Features</a>
           <a href="#apps" style={s.navLink}>Apps</a>
-          <button style={s.navBtn} onClick={() => setView('login')}>Sign In</button>
-          <button style={s.navBtnPrimary} onClick={() => setView('signup')}>Get Started</button>
+          <button style={s.navBtn} onClick={() => setView('docs')}>Docs</button>
+          <button style={s.navBtnPrimary} onClick={() => setView('choose')}>Get Started</button>
         </div>
       </nav>
 
@@ -97,11 +279,10 @@ const LandingPage: React.FC = () => {
             professional apps. Built for the modern web.
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button style={s.ctaPrimary} onClick={() => setView('signup')}>
+            <button style={s.ctaPrimary} onClick={() => setView('choose')}>
               Launch webOS
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
             </button>
-            <button style={s.ctaSecondary} onClick={() => setView('login')}>Sign In</button>
           </div>
         </div>
 
@@ -227,7 +408,7 @@ const LandingPage: React.FC = () => {
         <div style={{ maxWidth: 700, margin: '0 auto', padding: '60px 40px', borderRadius: 24, background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.1))', border: '1px solid rgba(255,255,255,0.08)' }}>
           <h2 style={{ fontSize: 36, fontWeight: 700, marginBottom: 12 }}>Ready to try webOS?</h2>
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.4)', marginBottom: 28 }}>No download needed. It runs right here in your browser.</p>
-          <button style={s.ctaPrimary} onClick={() => setView('signup')}>
+          <button style={s.ctaPrimary} onClick={() => setView('choose')}>
             Get Started Free
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
           </button>
@@ -267,6 +448,20 @@ const s: Record<string, React.CSSProperties> = {
 
   preview: { width: '100%', maxWidth: 850, borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 40px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)', transition: 'transform 0.1s linear' },
   prevTitlebar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#1c1c1e' },
+
+  docsPage: { width: '100%', height: '100%', overflow: 'auto', background: '#050510', color: '#fff' },
+  docsWrap: { display: 'flex', maxWidth: 1200, margin: '0 auto', padding: '40px 32px 80px', gap: 48 },
+  docsSidebar: { width: 220, flexShrink: 0, position: 'sticky', top: 90, alignSelf: 'flex-start', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 },
+  docsSidebarTitle: { fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 12px' },
+  docsSidebarLink: { display: 'block', padding: '7px 12px', borderRadius: 6, fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' },
+  docsMain: { flex: 1, minWidth: 0 },
+  docsH1: { fontSize: 44, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 10 },
+  docsLead: { fontSize: 17, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, marginBottom: 40 },
+  docsH2: { fontSize: 26, fontWeight: 700, marginTop: 40, marginBottom: 14, letterSpacing: '-0.01em', scrollMarginTop: 80 },
+  docsP: { fontSize: 15, color: 'rgba(255,255,255,0.7)', lineHeight: 1.7, marginBottom: 14 },
+  docsList: { fontSize: 15, color: 'rgba(255,255,255,0.7)', lineHeight: 1.9, marginBottom: 14, paddingLeft: 22 },
+  docsQ: { fontSize: 15, color: '#fff', fontWeight: 600, marginTop: 16, marginBottom: 4 },
+  docsA: { fontSize: 15, color: 'rgba(255,255,255,0.6)', lineHeight: 1.65, marginBottom: 8 },
 
   authPage: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', background: '#050510' },
   authBg: { position: 'absolute', inset: 0 },

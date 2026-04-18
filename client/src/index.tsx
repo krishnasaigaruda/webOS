@@ -1,3 +1,4 @@
+import './utils/hostRewrite'; // MUST be first — patches fetch for LAN access
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';

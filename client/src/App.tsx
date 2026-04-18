@@ -3,10 +3,13 @@ import { useStore } from './store/useStore';
 import { restoreState } from './store/useStore';
 import LandingPage from './components/landing/LandingPage';
 import Desktop from './components/desktop/Desktop';
+import MobileApp from './components/mobile/MobileApp';
+import { useDevice } from './hooks/useDeviceType';
 
 function App() {
   const { isLoggedIn, theme, accentColor } = useStore();
   const [restored, setRestored] = useState(false);
+  const device = useDevice();
 
   // Restore persisted state from IndexedDB on first load
   useEffect(() => {
@@ -30,7 +33,9 @@ function App() {
 
   return (
     <div data-theme={theme} style={{ width: '100%', height: '100%' }}>
-      {isLoggedIn ? <Desktop /> : <LandingPage />}
+      {device === 'desktop'
+        ? (isLoggedIn ? <Desktop /> : <LandingPage />)
+        : <MobileApp />}
     </div>
   );
 }

@@ -2,14 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" id="favicon" href="%PUBLIC_URL%/webos-icon.svg" type="image/svg+xml" />
+    <script>
+      // Convert SVG favicon to PNG for browsers that don't support SVG favicons (iOS WebKit)
+      (function(){
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="64" y2="64"><stop offset="0" stop-color="%236366f1"/><stop offset="1" stop-color="%238b5cf6"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(%23g)"/><rect x="10" y="12" width="44" height="32" rx="4" fill="none" stroke="white" stroke-width="2.5"/><line x1="20" y1="48" x2="44" y2="48" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="32" y1="44" x2="32" y2="48" stroke="white" stroke-width="2.5" stroke-linecap="round"/><circle cx="32" cy="28" r="6" fill="white" opacity="0.9"/></svg>';
+        var img = new Image();
+        img.onload = function(){
+          var c = document.createElement('canvas');
+          c.width = 64; c.height = 64;
+          c.getContext('2d').drawImage(img, 0, 0, 64, 64);
+          var link = document.getElementById('favicon');
+          if(link){ link.href = c.toDataURL('image/png'); link.type = 'image/png'; }
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + svg;
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="webOS — A complete operating system in your browser"
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/webos-icon.svg" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -24,7 +41,7 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>React App</title>
+    <title>webOS</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

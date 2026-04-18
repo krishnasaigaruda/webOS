@@ -56,8 +56,13 @@ const CameraApp: React.FC<{ window: WindowState }> = () => {
       setStream(s);
       if (videoRef.current) videoRef.current.srcObject = s;
       setError('');
-    } catch {
-      setError('Camera access denied. Please allow camera and microphone access in your browser settings.');
+    } catch (err: any) {
+      const isSecureContext = window.isSecureContext || window.location.hostname === 'localhost';
+      if (!isSecureContext) {
+        setError('Camera requires HTTPS. On iPad/iPhone, the camera only works when webOS is accessed over HTTPS or from localhost. Ask your admin to set up HTTPS (mkcert).');
+      } else {
+        setError('Camera access denied. Please allow camera and microphone access in your browser settings (tap the lock icon in the address bar).');
+      }
     }
   };
 

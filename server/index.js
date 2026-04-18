@@ -74,7 +74,7 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => cb(null, file.originalname)
 });
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
 
 // ============= FILE SYSTEM API =============
 
@@ -94,6 +94,27 @@ app.post('/api/fs/set-root', (req, res) => {
     const trashPath = path.join(rootPath, '.webos-trash');
     fs.mkdirSync(trashPath, { recursive: true });
     // Save config
+    saveConfig({ webosRoot: rootPath });
+    res.json({ success: true, root: rootPath });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a default webOS root — used by mobile setup flow (no AppleScript picker).
+// Creates ~/webOS-<nickname>/ and sets it as the sandbox root.
+app.post('/api/fs/create-default-root', (req, res) => {
+  const { nickname } = req.body || {};
+  if (!nickname || typeof nickname !== 'string') return res.status(400).json({ error: 'nickname required' });
+  try {
+    const home = require('os').homedir();
+    const safeNick = nickname.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 30) || 'user';
+    const rootPath = path.join(home, `webOS-${safeNick}`);
+    fs.mkdirSync(rootPath, { recursive: true });
+    const trashPath = path.join(rootPath, '.webos-trash');
+    fs.mkdirSync(trashPath, { recursive: true });
+    const photosPath = path.join(rootPath, 'Photos');
+    fs.mkdirSync(photosPath, { recursive: true });
     saveConfig({ webosRoot: rootPath });
     res.json({ success: true, root: rootPath });
   } catch (err) {

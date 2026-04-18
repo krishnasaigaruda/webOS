@@ -63,10 +63,26 @@ const TextEditApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   };
 
   const handleSave = async () => {
-    if (!filePath) { setShowSavePicker(true); return; }
-    await api.fs.write(filePath, content);
-    setModified(false);
-    addNotification({ title: 'TextEdit', message: `Saved ${filePath.split('/').pop()}`, icon: 'textedit' });
+    if (filePath) {
+      await api.fs.write(filePath, content);
+      setModified(false);
+      addNotification({ title: 'TextEdit', message: `Saved ${filePath.split('/').pop()}`, icon: 'textedit' });
+      return;
+    }
+    // No file path yet — auto-save into the webOS sandbox root as Untitled-<ts>.txt
+    try {
+      const r = await fetch('http://localhost:3001/api/fs/root').then(r => r.json());
+      if (!r.root) throw new Error('webOS folder not configured');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const newPath = `${r.root}/Untitled-${ts}.txt`;
+      await api.fs.write(newPath, content);
+      setFilePath(newPath);
+      updateWindow(win.id, { title: newPath.split('/').pop() || 'TextEdit', filePath: newPath });
+      setModified(false);
+      addNotification({ title: 'TextEdit', message: `Saved to My Files`, icon: 'textedit' });
+    } catch (e: any) {
+      addNotification({ title: 'TextEdit', message: `Save failed: ${e.message}`, icon: 'textedit' });
+    }
   };
 
   const handleSaveAs = async (path: string) => {

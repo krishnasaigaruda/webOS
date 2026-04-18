@@ -4,9 +4,9 @@ import { api } from '../../utils/api';
 
 const ControlCenter: React.FC = () => {
   const {
-    wifi, doNotDisturb, airplaneMode, volume,
+    wifi, doNotDisturb, airplaneMode,
     toggleWifi, toggleDoNotDisturb, toggleAirplaneMode,
-    setVolume, toggleControlCenter, theme, toggleTheme,
+    toggleControlCenter, theme, toggleTheme,
   } = useStore();
 
   const handleWifi = () => {
@@ -21,11 +21,6 @@ const ControlCenter: React.FC = () => {
     api.system.dnd(newState).catch(() => {});
   };
 
-  const handleVolume = (v: number) => {
-    setVolume(v);
-    api.system.volume(v).catch(() => {});
-  };
-
   return (
     <div style={styles.overlay} onClick={toggleControlCenter}>
       <div className="animate-scaleIn" style={styles.panel} onClick={e => e.stopPropagation()}>
@@ -36,16 +31,6 @@ const ControlCenter: React.FC = () => {
           <ToggleTile icon={<MoonIcon />} label="Do Not Disturb" active={doNotDisturb} sublabel={doNotDisturb ? 'On' : 'Off'} onClick={handleDnd} />
           <ToggleTile icon={theme === 'dark' ? <MoonIcon /> : <SunIcon />} label="Dark Mode" active={theme === 'dark'} sublabel={theme === 'dark' ? 'On' : 'Off'} onClick={toggleTheme} />
         </div>
-
-        {/* Volume slider */}
-        <div style={styles.sliderSection}>
-          <div style={styles.sliderRow}>
-            <VolumeIcon />
-            <input type="range" min="0" max="100" value={volume}
-              onChange={e => handleVolume(Number(e.target.value))} style={{ flex: 1 }} />
-          </div>
-        </div>
-
       </div>
     </div>
   );
@@ -78,7 +63,6 @@ const WifiIcon = () => <svg width="18" height="18" viewBox="0 0 16 16" fill="cur
 const AirplaneIcon = () => <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M14 7H9.5L7 1H5.5l1.5 6H2.5L1.5 5.5H.5L1.5 8l-1 2.5h1L2.5 9H7l-1.5 6H7l2.5-6H14c.6 0 1-.4 1-1s-.4-1-1-1z"/></svg>;
 const MoonIcon = () => <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M6 1C3.2 1.8 1.2 4.4 1.2 7.5c0 3.9 3.2 7 7 7 3.1 0 5.7-2 6.5-4.8-.7.3-1.4.4-2.2.4-3.4 0-6.2-2.8-6.2-6.2 0-.8.1-1.5.4-2.2L6 1z"/></svg>;
 const SunIcon = () => <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>;
-const VolumeIcon = () => <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5v5h2.5l3.5 3V2.5l-3.5 3H2z"/><path d="M10.5 4c1.2 1 2 2.3 2 4s-.8 3-2 4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
 
 const styles: Record<string, React.CSSProperties> = {
   overlay: { position: 'fixed', inset: 0, zIndex: 99998 },
@@ -92,11 +76,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', gap: 10,
   },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 },
-  sliderSection: { display: 'flex', flexDirection: 'column', gap: 8 },
-  sliderRow: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-    background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)',
-  },
 };
 
 export default ControlCenter;

@@ -6,18 +6,13 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
   const {
     theme, toggleTheme, accentColor, setAccentColor, wallpaper, setWallpaper,
     currentUser, wifi, doNotDisturb,
-    toggleWifi, toggleDoNotDisturb, volume, setVolume,
+    toggleWifi, toggleDoNotDisturb,
   } = useStore();
 
   const handleWifiToggle = () => {
     const next = !wifi;
     toggleWifi();
     api.system.wifi(next).catch(() => {});
-  };
-
-  const handleVolumeChange = (v: number) => {
-    setVolume(v);
-    api.system.volume(v).catch(() => {});
   };
   // If opened with filePath like 'about', go to that section
   const [activeSection, setActiveSection] = useState(win.filePath || 'general');
@@ -27,8 +22,7 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     appearance: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>,
     wallpaper: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
     network: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>,
-    sound: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>,
-    notifications: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+notifications: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
     about: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
   };
 
@@ -37,7 +31,6 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     { id: 'appearance', label: 'Appearance' },
     { id: 'wallpaper', label: 'Wallpaper' },
     { id: 'network', label: 'Network' },
-    { id: 'sound', label: 'Sound' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'about', label: 'About' },
   ];
@@ -165,16 +158,7 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
           </div>
         )}
 
-        {activeSection === 'sound' && (
-          <div>
-            <h2 style={styles.title}>Sound</h2>
-            <SettingRow label="Volume" desc={`${volume}%`}>
-              <input type="range" min="0" max="100" value={volume} onChange={e => handleVolumeChange(Number(e.target.value))} style={{ width: 200 }} />
-            </SettingRow>
-          </div>
-        )}
-
-        {activeSection === 'about' && (
+{activeSection === 'about' && (
           <div>
             <h2 style={styles.title}>About This webOS</h2>
             <div style={styles.aboutCard}>
@@ -185,8 +169,8 @@ const SettingsApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
                 <div style={{ fontSize: 20, fontWeight: 700 }}>webOS</div>
                 <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Version 1.0.0</div>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 12 }}>
-                  A complete web-based operating system with AI integration,
-                  real file sync, and professional applications.
+                  A complete web-based operating system with AI integration
+                  and professional applications.
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 16 }}>
                   Built with React, TypeScript, Node.js, and Monaco Editor

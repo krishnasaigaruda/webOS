@@ -77,7 +77,7 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
         </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
           {selectedIsVideo ? (
-            <video src={serveUrl(selectedItem)} controls autoPlay style={{ maxWidth: '100%', maxHeight: '100%' }} />
+            <video src={serveUrl(selectedItem)} controls autoPlay playsInline style={{ maxWidth: '100%', maxHeight: '100%' }} />
           ) : (
             <img src={serveUrl(selectedItem)} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
           )}
@@ -128,7 +128,7 @@ const PhotosApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
                   style={{ position: 'relative', paddingBottom: '75%', background: '#1e293b', borderRadius: 4, overflow: 'hidden', cursor: 'pointer' }}>
                   {video ? (
                     <>
-                      <video src={serveUrl(item.path)} preload="metadata" muted
+                      <video src={serveUrl(item.path)} preload="metadata" muted playsInline
                         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                       {/* Play badge */}
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>

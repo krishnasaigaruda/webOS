@@ -3,6 +3,8 @@ import { WindowState, useStore } from '../../store/useStore';
 import { registerApp, getAllApps } from '../../utils/appRegistry';
 import { saveInstalledApps } from '../../store/useStore';
 import { AppIcon } from '../../utils/icons';
+import { isMobileDevice } from '../../hooks/useDeviceType';
+import { isMobileAllowedApp } from '../mobile/mobileAppRegistry';
 
 interface StoreApp {
   id: string;
@@ -48,6 +50,9 @@ const CATEGORIES = ['All', 'Discover', 'Productivity', 'Developer Tools', 'Utili
 
 const AppStoreApp: React.FC<{ window: WindowState }> = () => {
   const [activeCategory, setActiveCategory] = useState('Discover');
+  const mobile = isMobileDevice();
+  // On mobile, filter out apps that aren't in the mobile-allowed list
+  const visibleApps = mobile ? STORE_APPS.filter(a => isMobileAllowedApp(a.id)) : STORE_APPS;
   const [selectedApp, setSelectedApp] = useState<StoreApp | null>(null);
   // Check which apps are installed (from default + restored from IndexedDB)
   const [installed, setInstalled] = useState<Set<string>>(() => {
@@ -79,13 +84,13 @@ const AppStoreApp: React.FC<{ window: WindowState }> = () => {
     openWindow(app.id, app.name, app.id, { width: 800, height: 600 });
   };
 
-  const filteredApps = STORE_APPS.filter(app => {
+  const filteredApps = visibleApps.filter(app => {
     if (searchQuery) return app.name.toLowerCase().includes(searchQuery.toLowerCase()) || app.description.toLowerCase().includes(searchQuery.toLowerCase());
     if (activeCategory === 'All' || activeCategory === 'Discover') return true;
     return app.category === activeCategory;
   });
 
-  const featuredApps = STORE_APPS.filter(a => a.featured);
+  const featuredApps = visibleApps.filter(a => a.featured);
 
   if (selectedApp) {
     return (

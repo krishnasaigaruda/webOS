@@ -6,7 +6,6 @@ const sections = [
 **webOS** is a complete web-based operating system that runs in your browser. It provides a full desktop experience with real file system access, AI integration, and professional applications.
 
 **Key Features:**
-- Real file sync with your Mac filesystem
 - AI-powered assistant (powered by Pollinations.ai)
 - 25+ built-in applications
 - Dark/Light themes with accent colors

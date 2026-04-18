@@ -50,6 +50,10 @@ interface OSStore {
   logout: () => void;
   clearJustLoggedIn: () => void;
 
+  // Session file path (.webos) — if set, state auto-syncs to this file
+  sessionFilePath: string | null;
+  setSessionFilePath: (path: string | null) => void;
+
   // Windows
   windows: WindowState[];
   nextZIndex: number;
@@ -162,8 +166,12 @@ export const useStore = create<OSStore>((set, get) => ({
     showControlCenter: false,
     showSpotlight: false,
     showNotificationCenter: false,
-    showWidgets: false
+    showWidgets: false,
+    sessionFilePath: null,
   }),
+
+  sessionFilePath: null,
+  setSessionFilePath: (path) => set({ sessionFilePath: path }),
 
   // Windows
   windows: [],
@@ -304,23 +312,43 @@ const PERSIST_KEYS = [
 // Debounced save
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+function buildSnapshot(): Record<string, any> {
+  const state = useStore.getState();
+  const snap: Record<string, any> = {};
+  for (const key of PERSIST_KEYS) {
+    snap[key] = (state as any)[key];
+  }
+  snap['savedWindows'] = state.windows.map(w => ({
+    appId: w.appId, title: w.title, x: w.x, y: w.y,
+    width: w.width, height: w.height, minWidth: w.minWidth, minHeight: w.minHeight,
+    isMinimized: w.isMinimized, isMaximized: w.isMaximized,
+    desktop: w.desktop, icon: w.icon, filePath: w.filePath,
+  }));
+  // Include reminders (stored in localStorage separately)
+  try {
+    const reminders = localStorage.getItem('webos-reminders');
+    if (reminders) snap['reminders'] = JSON.parse(reminders);
+  } catch {}
+  return snap;
+}
+
 function persistState() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const state = useStore.getState();
-    const toSave: Record<string, any> = {};
-    for (const key of PERSIST_KEYS) {
-      toSave[key] = (state as any)[key];
+    const snapshot = buildSnapshot();
+    for (const [key, value] of Object.entries(snapshot)) {
+      if (key !== 'reminders') saveState(key, value);
     }
-    // Save windows state (strip runtime fields)
-    toSave['savedWindows'] = state.windows.map(w => ({
-      appId: w.appId, title: w.title, x: w.x, y: w.y,
-      width: w.width, height: w.height, minWidth: w.minWidth, minHeight: w.minHeight,
-      isMinimized: w.isMinimized, isMaximized: w.isMaximized,
-      desktop: w.desktop, icon: w.icon, filePath: w.filePath,
-    }));
-    for (const [key, value] of Object.entries(toSave)) {
-      saveState(key, value);
+    // Also sync to the .webos session file if one is active
+    const sessionPath = useStore.getState().sessionFilePath;
+    if (sessionPath) {
+      try {
+        fetch('http://localhost:3001/api/session/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: sessionPath, data: snapshot }),
+        }).catch(() => {});
+      } catch {}
     }
   }, 500);
 }
@@ -334,6 +362,48 @@ export async function saveInstalledApps(apps: AppDefinition[]) {
     id: a.id, name: a.name, icon: a.icon, category: a.category,
     defaultWidth: a.defaultWidth, defaultHeight: a.defaultHeight, description: a.description,
   })));
+}
+
+// Apply a loaded snapshot (from a .webos session file) to the store.
+// Restores auth, UI state, windows, and reminders.
+export function applySessionSnapshot(snapshot: Record<string, any>) {
+  const newState: Record<string, any> = {};
+  for (const key of PERSIST_KEYS) {
+    if (snapshot[key] !== undefined) newState[key] = snapshot[key];
+  }
+  // Restore windows
+  if (Array.isArray(snapshot.savedWindows) && snapshot.savedWindows.length > 0) {
+    let zIdx = 100;
+    const restored: WindowState[] = snapshot.savedWindows.map((w: any, i: number) => ({
+      id: `restored-${i}-${Date.now()}`,
+      appId: w.appId,
+      title: w.title,
+      x: w.x || 100,
+      y: w.y || 50,
+      width: w.width || 800,
+      height: w.height || 600,
+      minWidth: w.minWidth || 400,
+      minHeight: w.minHeight || 300,
+      isMinimized: w.isMinimized || false,
+      isMaximized: w.isMaximized || false,
+      isActive: i === snapshot.savedWindows.length - 1,
+      zIndex: ++zIdx,
+      desktop: w.desktop || 0,
+      icon: w.icon || w.appId,
+      filePath: w.filePath,
+    }));
+    newState.windows = restored;
+    newState.nextZIndex = zIdx + 1;
+  } else {
+    newState.windows = [];
+  }
+  // Restore reminders to localStorage (where the checker reads them)
+  try {
+    if (Array.isArray(snapshot.reminders)) {
+      localStorage.setItem('webos-reminders', JSON.stringify(snapshot.reminders));
+    }
+  } catch {}
+  useStore.setState(newState as any);
 }
 
 // ============= Global Reminders Checker =============

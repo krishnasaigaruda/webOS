@@ -39,7 +39,10 @@ const NativeVideoPlayer: React.FC<{ filePath: string }> = ({ filePath }) => {
     const v = videoRef.current;
     if (!v) return;
     if (playing) { v.pause(); setPlaying(false); }
-    else { v.play(); setPlaying(true); }
+    else {
+      // iOS play() returns a Promise and can reject (e.g. user-gesture required)
+      v.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    }
   };
 
   const seek = (t: number) => {
@@ -79,7 +82,7 @@ const NativeVideoPlayer: React.FC<{ filePath: string }> = ({ filePath }) => {
       {/* Video */}
       <div style={{ flex: 1, position: 'relative', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         onClick={togglePlay}>
-        <video ref={videoRef} src={url} style={{ maxWidth: '100%', maxHeight: '100%' }} />
+        <video ref={videoRef} src={url} playsInline style={{ maxWidth: '100%', maxHeight: '100%' }} />
 
         {/* Play button overlay */}
         {!playing && (

@@ -82,6 +82,11 @@ const TOOLS_HUB_APPS: Record<string, string> = {
   'graph-plotter': 'graph-plotter.html',
   'voice-recorder': 'voice-recorder.html',
   'tuner': 'tuner.html',
+  'chess': 'chess.html',
+  '2048': '2048.html',
+  'snake': 'snake.html',
+  'tic-tac-toe': 'tic-tac-toe.html',
+  'memory-game': 'memory-game.html',
 };
 
 const ToolsHubWrapper: React.FC<{ window: WindowState; file: string }> = ({ window: win, file }) => (

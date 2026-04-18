@@ -39,6 +39,14 @@ export const APP_REGISTRY: Record<string, AppDefinition> = {
   'model-viewer': { id: 'model-viewer', name: '3D Model Viewer', icon: 'model-viewer', category: 'media', defaultWidth: 900, defaultHeight: 650, description: 'View 3D models (glb, gltf, obj, stl, fbx)' },
   'video-player': { id: 'video-player', name: 'Video Player', icon: 'video-player', category: 'media', defaultWidth: 900, defaultHeight: 650, description: 'Play video files' },
   'app-store': { id: 'app-store', name: 'App Store', icon: 'app-store', category: 'system', defaultWidth: 900, defaultHeight: 650, description: 'Discover and install apps' },
+  'timer': { id: 'timer', name: 'Timer', icon: 'timer', category: 'utilities', defaultWidth: 400, defaultHeight: 500, description: 'Timer and stopwatch' },
+  'chess': { id: 'chess', name: 'Chess', icon: 'chess', category: 'media', defaultWidth: 480, defaultHeight: 560, description: 'Play chess' },
+  '2048': { id: '2048', name: '2048', icon: '2048', category: 'media', defaultWidth: 400, defaultHeight: 520, description: 'Slide tiles to reach 2048' },
+  'snake': { id: 'snake', name: 'Snake', icon: 'snake', category: 'media', defaultWidth: 400, defaultHeight: 520, description: 'Classic snake game' },
+  'tic-tac-toe': { id: 'tic-tac-toe', name: 'Tic Tac Toe', icon: 'tic-tac-toe', category: 'media', defaultWidth: 380, defaultHeight: 460, description: 'Play tic-tac-toe' },
+  'memory-game': { id: 'memory-game', name: 'Memory', icon: 'memory-game', category: 'media', defaultWidth: 400, defaultHeight: 480, description: 'Match pairs memory game' },
+  'drawing-pad': { id: 'drawing-pad', name: 'Drawing Pad', icon: 'drawing-pad', category: 'media', defaultWidth: 700, defaultHeight: 500, description: 'Digital drawing canvas' },
+  'translator': { id: 'translator', name: 'Translate', icon: 'translator', category: 'utilities', defaultWidth: 500, defaultHeight: 450, description: 'Translate between languages' },
 };
 
 export const getApp = (id: string): AppDefinition | undefined => APP_REGISTRY[id];
