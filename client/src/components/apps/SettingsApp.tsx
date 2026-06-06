@@ -167,7 +167,7 @@ notifications: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strok
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 20, fontWeight: 700 }}>webOS</div>
-                <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Version 1.1.4</div>
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Version 1.1.5</div>
                 <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 12 }}>
                   A complete web-based operating system with AI integration
                   and professional applications.
