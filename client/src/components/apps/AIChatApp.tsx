@@ -8,7 +8,7 @@ interface Message {
 
 const AIChatApp: React.FC<{ window: WindowState }> = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I\'m the webOS AI Assistant powered by AI. Ask me anything - I can help with code, writing, math, ideas, and more.' },
+    { role: 'assistant', content: 'Hello! I\'m the webOS AI Assistant powered by Pollinations.ai. Ask me anything - I can help with code, writing, math, ideas, and more.' },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -89,7 +89,7 @@ const AIChatApp: React.FC<{ window: WindowState }> = () => {
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>AI Assistant</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>{loading ? 'Thinking...' : 'Powered by AI'}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>{loading ? 'Thinking...' : 'Powered by pollinations.ai'}</div>
           </div>
         </div>
         <button style={s.clearBtn} onClick={() => setMessages([{ role: 'assistant', content: 'Chat cleared. How can I help?' }])}>Clear</button>

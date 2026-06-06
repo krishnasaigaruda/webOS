@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore, FileItem } from '../../store/useStore';
+import { api } from '../../utils/api';
+import { FolderIconSvg, FileIconSvg } from '../apps/FinderApp';
 import MenuBar from './MenuBar';
 import Dock from './Dock';
 import WindowManager from './WindowManager';
@@ -11,7 +13,6 @@ import NotificationToasts from '../system/NotificationToasts';
 import WidgetPanel from '../system/WidgetPanel';
 import DesktopWidgets from './DesktopWidgets';
 import SetupWizard from '../system/SetupWizard';
-import { FinderIcon } from '../../utils/icons';
 
 const WALLPAPERS: Record<string, string> = {
   default: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 30%, #0f3460 60%, #533483 100%)',
@@ -35,6 +36,32 @@ const Desktop: React.FC = () => {
   const justLoggedIn = useStore(s => s.justLoggedIn);
   const clearJustLoggedIn = useStore(s => s.clearJustLoggedIn);
   const [needsSetup, setNeedsSetup] = useState(justLoggedIn);
+
+  // Imported files/folders that live at the top level of the webOS sandbox.
+  const [webosRoot, setWebosRoot] = useState('');
+  const [desktopFiles, setDesktopFiles] = useState<FileItem[]>([]);
+
+  const loadDesktopFiles = useCallback(async () => {
+    try {
+      const { root } = await fetch('http://localhost:3001/api/fs/root').then(r => r.json());
+      if (!root) { setWebosRoot(''); setDesktopFiles([]); return; }
+      setWebosRoot(root);
+      const items: FileItem[] = await api.fs.list(root);
+      items.sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      setDesktopFiles(items);
+    } catch { setDesktopFiles([]); }
+  }, []);
+
+  // Load on mount and whenever the filesystem changes (import/delete/rename).
+  useEffect(() => {
+    loadDesktopFiles();
+    const handler = () => loadDesktopFiles();
+    window.addEventListener('webos-fs-changed', handler);
+    return () => window.removeEventListener('webos-fs-changed', handler);
+  }, [loadDesktopFiles]);
 
   // Only show setup wizard if user just logged in fresh (not from restore)
   useEffect(() => {
@@ -123,16 +150,18 @@ const Desktop: React.FC = () => {
         {/* Desktop Widgets - time, date, weather */}
         <DesktopWidgets />
 
-        {/* Desktop Icons */}
-        <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-          {[
-            { name: 'Macintosh HD', path: '/' },
-            { name: 'Documents', path: '/Users/krishna/Documents' },
-            { name: 'Downloads', path: '/Users/krishna/Downloads' },
-          ].map((item, i) => (
+        {/* Desktop Icons — imported files & folders. Double-click opens
+            Finder at the sandbox root with the item highlighted. */}
+        <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', maxHeight: 'calc(100% - 32px)', flexWrap: 'wrap' }}>
+          {desktopFiles.map((item) => (
             <div
-              key={i}
-              onClick={(e) => { e.stopPropagation(); openWindow('finder', item.name, 'finder', { filePath: item.path }); }}
+              key={item.path}
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                openWindow('finder', item.name, 'finder', { filePath: webosRoot, selectPath: item.path });
+              }}
+              title={item.name}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -147,13 +176,17 @@ const Desktop: React.FC = () => {
               onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
               onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <FinderIcon size={52} />
+              {item.isDirectory ? <FolderIconSvg size={52} /> : <FileIconSvg name={item.name} size={52} />}
               <span style={{
                 fontSize: 11,
                 color: '#fff',
                 textShadow: '0 1px 4px rgba(0,0,0,0.7)',
                 textAlign: 'center',
                 fontWeight: 500,
+                maxWidth: 78,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}>{item.name}</span>
             </div>
           ))}

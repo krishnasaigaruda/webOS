@@ -21,7 +21,7 @@ const sections = [
 
 **Dock** (bottom) - Your favorite apps. Click to open, right-click for options. Drag to rearrange. The trash can opens your Trash folder.
 
-**Desktop Icons** - Click Macintosh HD, Documents, or Downloads to open Finder at those locations.
+**Desktop Icons** - Your imported files and folders appear on the desktop. Double-click one to open Finder with that item highlighted.
 
 **Spotlight Search** - Press Cmd+Space or click the search icon. Search for apps and files recursively through all folders.
 

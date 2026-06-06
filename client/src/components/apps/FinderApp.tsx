@@ -730,7 +730,7 @@ const SidebarIcon: React.FC<{type: string; active: boolean}> = ({type, active}) 
   return <span style={{display:'flex',flexShrink:0}}>{icons[type]||icons.docs}</span>;
 };
 
-const FolderIconSvg: React.FC<{size?: number}> = ({size = 16}) => (
+export const FolderIconSvg: React.FC<{size?: number}> = ({size = 16}) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="#64B5F6">
     <path d="M1.5 4A1.5 1.5 0 013 2.5h3.5L8.5 5H13A1.5 1.5 0 0114.5 6.5v6A1.5 1.5 0 0113 14H3A1.5 1.5 0 011.5 12.5V4z"/>
   </svg>
@@ -747,7 +747,7 @@ const AppBundleIcon: React.FC<{size?: number}> = ({size = 16}) => (
   </svg>
 );
 
-const FileIconSvg: React.FC<{name: string; size?: number}> = ({name, size = 16}) => {
+export const FileIconSvg: React.FC<{name: string; size?: number}> = ({name, size = 16}) => {
   const ext = getExt(name);
   const colorMap: Record<string, string> = {
     js:'#F7DF1E', ts:'#3178C6', jsx:'#61DAFB', tsx:'#61DAFB', py:'#3776AB',
