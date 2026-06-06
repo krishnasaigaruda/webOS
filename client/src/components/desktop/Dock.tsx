@@ -64,34 +64,47 @@ const Dock: React.FC = () => {
     return 0;
   };
 
+  // Apps that have open windows but aren't pinned to the dock — show them
+  // temporarily (macOS style) until all their windows are closed.
+  const runningExtraApps = Array.from(new Set(
+    windows.map(w => w.appId)
+  )).filter(id => !dockApps.includes(id) && getApp(id));
+
+  // Single continuous index space so the magnification neighbour effect
+  // works seamlessly across pinned and temporary icons.
+  const iconApps = [...dockApps, ...runningExtraApps];
+
   return (
     <div style={styles.dockContainer}>
       <div style={styles.dock}>
-        {dockApps.map((appId, index) => {
+        {iconApps.map((appId, index) => {
           const app = getApp(appId);
           if (!app) return null;
           const hasOpenWindows = windows.some(w => w.appId === appId);
+          const isTemporary = index >= dockApps.length;
           return (
-            <div
-              key={appId}
-              style={styles.dockItemContainer}
-              onMouseEnter={() => setHoveredIndex(index)}
-              onMouseLeave={() => setHoveredIndex(null)}
-            >
-              {hoveredIndex === index && (
-                <div style={styles.tooltip}>{app.name}</div>
-              )}
-              <motion.div
-                animate={{ scale: getScale(index), y: getY(index) }}
-                transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-                style={styles.dockItem}
-                onClick={() => handleAppClick(appId)}
-                onContextMenu={(e) => handleContextMenu(e, appId)}
+            <React.Fragment key={appId}>
+              {isTemporary && index === dockApps.length && <div style={styles.separator} />}
+              <div
+                style={styles.dockItemContainer}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
               >
-                <AppIcon appId={appId} size={46} />
-              </motion.div>
-              {hasOpenWindows && <div style={styles.runningDot} />}
-            </div>
+                {hoveredIndex === index && (
+                  <div style={styles.tooltip}>{app.name}</div>
+                )}
+                <motion.div
+                  animate={{ scale: getScale(index), y: getY(index) }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                  style={styles.dockItem}
+                  onClick={() => handleAppClick(appId)}
+                  onContextMenu={(e) => handleContextMenu(e, appId)}
+                >
+                  <AppIcon appId={appId} size={46} />
+                </motion.div>
+                {hasOpenWindows && <div style={styles.runningDot} />}
+              </div>
+            </React.Fragment>
           );
         })}
 

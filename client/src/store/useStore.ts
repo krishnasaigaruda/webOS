@@ -19,6 +19,7 @@ export interface WindowState {
   desktop: number;
   icon: string;
   filePath?: string;
+  selectPath?: string; // when set, Finder opens at filePath and highlights this item
 }
 
 export interface Notification {
@@ -197,6 +198,7 @@ export const useStore = create<OSStore>((set, get) => ({
       desktop: state.currentDesktop,
       icon,
       filePath: opts.filePath,
+      selectPath: opts.selectPath,
     };
     set(s => ({
       windows: [...s.windows.map(w => ({ ...w, isActive: false })), newWindow],

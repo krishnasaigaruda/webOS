@@ -1073,10 +1073,13 @@ function cleanAIResponse(text) {
   return cleaned.join('\n').trim();
 }
 
-// This endpoint is used by both the AI chat app AND the Orbix iframe
-app.post('/api/chat', async (req, res) => {
-  const { messages } = req.body;
-  try {
+// Calls the Pollinations text API, retrying when the anonymous queue is full
+// (HTTP 429). Pollinations returns its errors as a JSON body even with a 429
+// status, so we must detect those instead of forwarding them as the AI reply.
+async function fetchAICompletion(messages) {
+  const maxAttempts = 4;
+  let lastError = '';
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const payload = JSON.stringify({
       messages,
       model: 'openai',
@@ -1087,14 +1090,46 @@ app.post('/api/chat', async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: payload,
     });
-    let text = await response.text();
-    text = cleanAIResponse(text);
-    if (text) {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.send(text);
-    } else {
-      res.status(502).send('AI service returned empty response. Try again.');
+    const raw = await response.text();
+
+    // Pollinations signals errors via a JSON body like {"error":"...","status":429}
+    const looksLikeError = !response.ok || /^\s*\{\s*"error"\s*:/.test(raw);
+    if (looksLikeError) {
+      let rateLimited = response.status === 429;
+      try {
+        const j = JSON.parse(raw);
+        if (j.status === 429 || /queue full|rate limit|too many/i.test(j.error || '')) rateLimited = true;
+        lastError = j.error || raw;
+      } catch { lastError = raw; }
+
+      // The anonymous queue allows 1 in-flight request; a short backoff usually clears it.
+      if (rateLimited && attempt < maxAttempts - 1) {
+        await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
+        continue;
+      }
+      return { ok: false, rateLimited, error: lastError };
     }
+
+    const text = cleanAIResponse(raw);
+    if (text) return { ok: true, text };
+    lastError = 'empty response';
+  }
+  return { ok: false, rateLimited: false, error: lastError };
+}
+
+// This endpoint is used by both the AI chat app AND the Orbix iframe
+app.post('/api/chat', async (req, res) => {
+  const { messages } = req.body;
+  try {
+    const result = await fetchAICompletion(messages);
+    if (result.ok) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.send(result.text);
+    }
+    if (result.rateLimited) {
+      return res.status(429).send('The AI is busy right now (rate limit reached). Please wait a few seconds and try again.');
+    }
+    return res.status(502).send('AI service is temporarily unavailable. Please try again.');
   } catch (err) {
     console.error('AI error:', err.message);
     res.status(502).send('AI service unavailable. Try again.');
@@ -1105,19 +1140,16 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/ai/chat', async (req, res) => {
   const { messages } = req.body;
   try {
-    const payload = JSON.stringify({
-      messages,
-      model: 'openai',
-      seed: Math.floor(Math.random() * 999999),
+    const result = await fetchAICompletion(messages);
+    if (result.ok) {
+      return res.json({ response: result.text, model: 'pollinations' });
+    }
+    res.json({
+      response: result.rateLimited
+        ? 'The AI is busy right now (rate limit reached). Please wait a few seconds and try again.'
+        : 'AI service is temporarily unavailable. Please try again.',
+      model: 'error',
     });
-    const response = await fetch('https://text.pollinations.ai/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload,
-    });
-    let text = await response.text();
-    text = cleanAIResponse(text);
-    res.json({ response: text || 'No response from AI.', model: 'pollinations' });
   } catch (err) {
     res.json({ response: 'AI service unavailable. Check your internet connection.', model: 'error' });
   }

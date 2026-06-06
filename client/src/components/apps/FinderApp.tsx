@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WindowState, useStore } from '../../store/useStore';
 import { api } from '../../utils/api';
 import { AppIcon } from '../../utils/icons';
@@ -160,6 +160,17 @@ const FinderApp: React.FC<{ window: WindowState }> = ({ window: win }) => {
     loadFiles(currentPath);
     updateWindow(win.id, { title: currentPath.split('/').pop() || '/' });
   }, [currentPath]); // eslint-disable-line
+
+  // When opened with a target item (e.g. double-clicking a desktop icon),
+  // highlight it once its containing folder has loaded.
+  const selectAppliedRef = useRef(false);
+  useEffect(() => {
+    if (selectAppliedRef.current || !win.selectPath) return;
+    if (files.some(f => f.path === win.selectPath)) {
+      setSelectedFile(win.selectPath);
+      selectAppliedRef.current = true;
+    }
+  }, [files, win.selectPath]);
 
   // Live-refresh when any other app mutates the filesystem
   useEffect(() => {

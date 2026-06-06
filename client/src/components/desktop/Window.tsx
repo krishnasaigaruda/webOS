@@ -41,48 +41,23 @@ const Window: React.FC<WindowProps> = ({ window: win, children }) => {
     ]);
   };
 
-  if (win.isMaximized) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.98 }}
-        transition={{ duration: 0.2 }}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: win.zIndex,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'var(--window-bg)',
-          borderRadius: 0,
-          overflow: 'hidden',
-        }}
-        onMouseDown={handleFocus}
-      >
-        <TitleBar
-          win={win}
-          onClose={() => closeWindow(win.id)}
-          onMinimize={() => minimizeWindow(win.id)}
-          onMaximize={() => restoreWindow(win.id)}
-          onDoubleClick={handleTitleBarDoubleClick}
-          onContextMenu={handleContextMenu}
-          isMaximized
-        />
-        <div style={{ flex: 1, overflow: 'hidden' }}>{children}</div>
-      </motion.div>
-    );
-  }
+  const maximized = win.isMaximized;
 
+  // NOTE: We always render the SAME Rnd element tree, switching it into a
+  // "filled" mode when maximized rather than returning a different element.
+  // Returning a structurally different tree on maximize would unmount and
+  // remount `children` (the app), destroying its local React state — which
+  // is what caused chat/app progress to be lost on fullscreen toggle.
   return (
     <Rnd
-      size={{ width: win.width, height: win.height }}
-      position={{ x: win.x, y: win.y }}
+      size={maximized ? { width: '100%', height: '100%' } : { width: win.width, height: win.height }}
+      position={maximized ? { x: 0, y: 0 } : { x: win.x, y: win.y }}
       minWidth={win.minWidth || 400}
       minHeight={win.minHeight || 300}
       bounds="parent"
       dragHandleClassName="window-titlebar"
       style={{ zIndex: win.zIndex }}
+      disableDragging={maximized}
       onMouseDown={handleFocus}
       onDragStop={(e, d) => updateWindow(win.id, { x: d.x, y: d.y })}
       onResizeStop={(e, dir, ref, delta, pos) => {
@@ -93,7 +68,7 @@ const Window: React.FC<WindowProps> = ({ window: win, children }) => {
           y: pos.y,
         });
       }}
-      enableResizing={{
+      enableResizing={maximized ? false : {
         top: true, right: true, bottom: true, left: true,
         topRight: true, bottomRight: true, bottomLeft: true, topLeft: true,
       }}
@@ -109,10 +84,12 @@ const Window: React.FC<WindowProps> = ({ window: win, children }) => {
           display: 'flex',
           flexDirection: 'column',
           background: 'var(--window-bg)',
-          borderRadius: 'var(--window-radius)',
-          boxShadow: win.isActive
-            ? '0 20px 60px rgba(0,0,0,0.35), 0 0 0 0.5px var(--border)'
-            : '0 10px 30px rgba(0,0,0,0.2), 0 0 0 0.5px var(--border)',
+          borderRadius: maximized ? 0 : 'var(--window-radius)',
+          boxShadow: maximized
+            ? 'none'
+            : win.isActive
+              ? '0 20px 60px rgba(0,0,0,0.35), 0 0 0 0.5px var(--border)'
+              : '0 10px 30px rgba(0,0,0,0.2), 0 0 0 0.5px var(--border)',
           overflow: 'hidden',
           transition: 'box-shadow 0.2s ease',
         }}
@@ -121,9 +98,10 @@ const Window: React.FC<WindowProps> = ({ window: win, children }) => {
           win={win}
           onClose={() => closeWindow(win.id)}
           onMinimize={() => minimizeWindow(win.id)}
-          onMaximize={() => maximizeWindow(win.id)}
+          onMaximize={() => maximized ? restoreWindow(win.id) : maximizeWindow(win.id)}
           onDoubleClick={handleTitleBarDoubleClick}
           onContextMenu={handleContextMenu}
+          isMaximized={maximized}
         />
         <div style={{ flex: 1, overflow: 'hidden' }}>{children}</div>
       </motion.div>

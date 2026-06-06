@@ -62,8 +62,17 @@ const AIChatApp: React.FC<{ window: WindowState }> = () => {
         body: JSON.stringify({ messages: apiMessages }),
       });
 
-      const text = await response.text();
-      setMessages([...newMessages, { role: 'assistant', content: text || 'Sorry, I couldn\'t generate a response.' }]);
+      const text = (await response.text()).trim();
+
+      // Guard against rate-limit / error payloads being shown as a reply.
+      if (!response.ok || /^\{\s*"error"\s*:/.test(text)) {
+        const friendly = response.status === 429
+          ? 'The AI is busy right now — please wait a few seconds and try again.'
+          : 'Sorry, the AI service is temporarily unavailable. Please try again.';
+        setMessages([...newMessages, { role: 'assistant', content: friendly }]);
+      } else {
+        setMessages([...newMessages, { role: 'assistant', content: text || 'Sorry, I couldn\'t generate a response.' }]);
+      }
     } catch {
       setMessages([...newMessages, { role: 'assistant', content: 'Connection error. Make sure the webOS server is running.' }]);
     }
