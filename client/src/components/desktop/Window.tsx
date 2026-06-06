@@ -56,7 +56,7 @@ const Window: React.FC<WindowProps> = ({ window: win, children }) => {
       minHeight={win.minHeight || 300}
       bounds="parent"
       dragHandleClassName="window-titlebar"
-      style={{ zIndex: win.zIndex }}
+      style={{ zIndex: win.zIndex, pointerEvents: 'auto' }}
       disableDragging={maximized}
       onMouseDown={handleFocus}
       onDragStop={(e, d) => updateWindow(win.id, { x: d.x, y: d.y })}

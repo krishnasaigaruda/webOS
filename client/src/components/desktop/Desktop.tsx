@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useStore, FileItem } from '../../store/useStore';
 import { api } from '../../utils/api';
 import { FolderIconSvg, FileIconSvg } from '../apps/FinderApp';
+import { getAllApps } from '../../utils/appRegistry';
+import { AppIcon } from '../../utils/icons';
 import MenuBar from './MenuBar';
 import Dock from './Dock';
 import WindowManager from './WindowManager';
@@ -32,6 +34,7 @@ const Desktop: React.FC = () => {
     showContextMenu, hideContextMenu, contextMenu,
     showControlCenter, showNotificationCenter, showSpotlight, showWidgets,
     toggleSpotlight, openWindow, addNotification,
+    windows, focusWindow,
   } = useStore();
   const justLoggedIn = useStore(s => s.justLoggedIn);
   const clearJustLoggedIn = useStore(s => s.clearJustLoggedIn);
@@ -88,6 +91,18 @@ const Desktop: React.FC = () => {
   const handleDesktopClick = useCallback(() => {
     hideContextMenu();
   }, [hideContextMenu]);
+
+  // Open an app from the left-side launcher (focus it if already open).
+  const handleLaunchApp = useCallback((app: ReturnType<typeof getAllApps>[number]) => {
+    const existing = windows.find(w => w.appId === app.id);
+    if (existing) { focusWindow(existing.id); return; }
+    openWindow(app.id, app.name, app.icon, {
+      width: app.defaultWidth, height: app.defaultHeight,
+      minWidth: app.minWidth, minHeight: app.minHeight,
+    });
+  }, [windows, focusWindow, openWindow]);
+
+  const allApps = getAllApps();
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -149,6 +164,34 @@ const Desktop: React.FC = () => {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {/* Desktop Widgets - time, date, weather */}
         <DesktopWidgets />
+
+        {/* Left-side app launcher — all webOS apps, click to open */}
+        <div style={{
+          position: 'absolute', top: 16, left: 16, bottom: 16,
+          display: 'flex', flexDirection: 'column', flexWrap: 'wrap',
+          gap: 2, alignContent: 'flex-start',
+        }}>
+          {allApps.map(app => (
+            <div
+              key={app.id}
+              onClick={(e) => { e.stopPropagation(); handleLaunchApp(app); }}
+              title={app.name}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                padding: 6, borderRadius: 8, cursor: 'pointer', userSelect: 'none', width: 76,
+              }}
+              onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+              onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <AppIcon appId={app.id} size={44} />
+              <span style={{
+                fontSize: 11, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.7)',
+                textAlign: 'center', fontWeight: 500, maxWidth: 74,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{app.name}</span>
+            </div>
+          ))}
+        </div>
 
         {/* Desktop Icons — imported files & folders. Double-click opens
             Finder at the sandbox root with the item highlighted. */}
