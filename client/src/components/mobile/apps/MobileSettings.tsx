@@ -84,7 +84,7 @@ const MobileSettings: React.FC<{ window: WindowState }> = () => {
 
       {/* About */}
       <Section title="About">
-        <Row label="webOS" right={<span style={{ color: '#8e8e93' }}>Version 1.1.5</span>} />
+        <Row label="webOS" right={<span style={{ color: '#8e8e93' }}>Version 2.1.3</span>} />
         <Row label="Device" right={<span style={{ color: '#8e8e93' }}>Mobile</span>} />
       </Section>
 
