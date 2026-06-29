@@ -18,7 +18,7 @@ interface StoreApp {
   color: string;
 }
 
-const STORE_APPS: StoreApp[] = [
+export const STORE_APPS: StoreApp[] = [
   { id: 'code-editor', name: 'Code Editor', developer: 'webOS', rating: 4.8, category: 'Developer Tools', description: 'Professional code editor with Monaco, syntax highlighting, and multi-file tabs.', installed: true, featured: true, color: '#0078d4' },
   { id: 'ai-chat', name: 'AI Assistant', developer: 'webOS AI', rating: 4.9, category: 'Productivity', description: 'AI-powered assistant that can help with code, writing, analysis, and OS control.', installed: true, featured: true, color: '#7C3AED' },
   { id: 'spreadsheet', name: 'Spreadsheet', developer: 'webOS', rating: 4.5, category: 'Productivity', description: 'Create and edit spreadsheets with formulas, functions, and data analysis.', installed: true, color: '#2E7D32' },
