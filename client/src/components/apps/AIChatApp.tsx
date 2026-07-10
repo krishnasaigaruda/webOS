@@ -426,7 +426,15 @@ const AIChatApp: React.FC<{ window: WindowState }> = () => {
     try {
       reply = await callModel();
     } catch (e: any) {
-      pushStep({ kind: 'assistant', text: e?.message === 'busy' ? 'The AI is busy right now — wait a few seconds and try again.' : 'Connection error. Make sure the webOS server is running.' });
+      // callModel throws 'busy'/'unavailable' when the server answered; any
+      // other error means the fetch never landed, so the server is unreachable.
+      pushStep({
+        kind: 'assistant',
+        text:
+          e?.message === 'busy' ? 'The AI is busy right now — wait a few seconds and try again.'
+          : e?.message === 'unavailable' ? 'The AI service is unavailable right now — this is an outage on their end, not yours. Try again in a bit.'
+          : 'Connection error. Make sure the webOS server is running.',
+      });
       setBusy(false);
       return;
     }
